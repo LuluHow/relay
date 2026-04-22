@@ -1810,14 +1810,29 @@ fn render_budget_section(
         (p, w)
     };
 
-    let total_tok =
-        parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
+    // Current context tokens (what's actually in the window now)
+    let current_ctx = status
+        .map(|s| s.current_input + s.cache_read + s.cache_create)
+        .filter(|&t| t > 0)
+        .unwrap_or(parsed.current_context_tokens);
+
+    let pct_color = if pct > 80.0 {
+        RED
+    } else if pct > 60.0 {
+        AMBER
+    } else {
+        GREEN
+    };
 
     lines.push(Line::from(vec![
         Span::styled(" context window", Style::default().fg(DIM)),
         Span::styled(
-            format!("  {}k / {}k", total_tok / 1000, window / 1000),
+            format!("  {}k / {}k", current_ctx / 1000, window / 1000),
             Style::default().fg(FG).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("  {:.0}%", pct),
+            Style::default().fg(pct_color).add_modifier(Modifier::BOLD),
         ),
     ]));
 
@@ -2135,4 +2150,500 @@ fn format_tokens(n: u64) -> String {
     } else {
         format!("{n}")
     }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Orchestration TUI ──────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+use crate::orchestrator::{Orchestrator, Plan, TaskStatus};
+
+struct OrchApp {
+    orchestrator: Orchestrator,
+    selected_task: usize,
+    scroll_offset: u16,
+    should_quit: bool,
+    status_msg: Option<(String, Instant)>,
+    finished: bool,
+}
+
+impl OrchApp {
+    fn new(plan: Plan, project_root: std::path::PathBuf) -> Result<Self> {
+        let mut orchestrator = Orchestrator::new(plan, project_root);
+        orchestrator.setup()?;
+        Ok(Self {
+            orchestrator,
+            selected_task: 0,
+            scroll_offset: 0,
+            should_quit: false,
+            status_msg: None,
+            finished: false,
+        })
+    }
+}
+
+pub fn run_orchestrate(plan: Plan, project_root: std::path::PathBuf) -> Result<()> {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut app = OrchApp::new(plan, project_root)?;
+    let result = run_orch_loop(&mut terminal, &mut app);
+
+    // Cleanup on exit
+    if !app.finished {
+        app.orchestrator.abort();
+    }
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    // Post-exit: print summary
+    if app.finished {
+        let summary = app.orchestrator.generate_summary();
+        println!("{summary}");
+
+        let on_complete = &app.orchestrator.plan.plan.on_complete;
+        match on_complete.as_str() {
+            "merge" => {
+                println!("Merging branch '{}'...", app.orchestrator.branch_name);
+                match app.orchestrator.merge_branch() {
+                    Ok(msg) => println!("  \u{2713} {msg}"),
+                    Err(e) => println!("  \u{2717} {e}"),
+                }
+            }
+            "pr" => {
+                println!("Creating pull request...");
+                match app.orchestrator.create_pull_request() {
+                    Ok(url) => println!("  \u{2713} {url}"),
+                    Err(e) => println!("  \u{2717} {e}"),
+                }
+            }
+            _ => {
+                println!(
+                    "Branch '{}' ready. Use `git checkout {}` to review, then merge manually.",
+                    app.orchestrator.branch_name, app.orchestrator.branch_name
+                );
+            }
+        }
+
+        // Always cleanup worktree — branch remains accessible via git checkout
+        app.orchestrator.cleanup_worktree();
+    } else {
+        app.orchestrator.cleanup_worktree();
+        println!("Orchestration aborted. Worktree cleaned up.");
+    }
+
+    result
+}
+
+fn run_orch_loop(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut OrchApp,
+) -> Result<()> {
+    loop {
+        terminal.draw(|f| orch_ui(f, app))?;
+
+        if !app.finished {
+            let all_done = app.orchestrator.tick();
+            if all_done {
+                app.finished = true;
+                app.status_msg = Some(("all tasks completed".to_string(), Instant::now()));
+            }
+        }
+
+        if event::poll(Duration::from_millis(500))? {
+            if let Event::Key(key) = event::read()? {
+                orch_handle_key(app, key);
+            }
+        }
+
+        if app.should_quit {
+            return Ok(());
+        }
+    }
+}
+
+fn orch_handle_key(app: &mut OrchApp, key: event::KeyEvent) {
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+        app.should_quit = true;
+        return;
+    }
+
+    match key.code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Up | KeyCode::Char('k') => {
+            if app.selected_task > 0 {
+                app.selected_task -= 1;
+                app.scroll_offset = 0;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if app.selected_task + 1 < app.orchestrator.tasks.len() {
+                app.selected_task += 1;
+                app.scroll_offset = 0;
+            }
+        }
+        KeyCode::Char('a') => {
+            if !app.finished {
+                app.orchestrator.abort();
+                app.finished = true;
+                app.status_msg = Some(("aborted all tasks".to_string(), Instant::now()));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn orch_ui(f: &mut Frame, app: &mut OrchApp) {
+    f.render_widget(Block::default().style(Style::default().bg(BG)), f.area());
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // header
+            Constraint::Min(5),    // body
+            Constraint::Length(1), // footer
+        ])
+        .split(f.area());
+
+    orch_render_header(f, app, chunks[0]);
+
+    // Body: left (task list) + right (task detail/output)
+    let body = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(40), // task list
+            Constraint::Min(40),    // task detail
+        ])
+        .split(chunks[1]);
+
+    orch_render_task_list(f, app, body[0]);
+    orch_render_task_detail(f, app, body[1]);
+    orch_render_footer(f, app, chunks[2]);
+}
+
+fn orch_render_header(f: &mut Frame, app: &OrchApp, area: Rect) {
+    let (pending, blocked, running, done, failed) = app.orchestrator.counts();
+    let elapsed = crate::util::format_duration(app.orchestrator.elapsed().as_secs());
+
+    let perms_indicator = if app.orchestrator.plan.plan.skip_permissions {
+        Span::styled(" skip-perms ", Style::default().fg(RED))
+    } else {
+        Span::raw("")
+    };
+
+    let line = Line::from(vec![
+        Span::styled(
+            "▞ relay",
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" │ ", Style::default().fg(DIMMER)),
+        Span::styled("orchestrate", Style::default().fg(VIOLET)),
+        Span::styled(
+            format!(" · {}", app.orchestrator.plan.plan.name),
+            Style::default().fg(FG),
+        ),
+        Span::styled(
+            format!(" ({})", app.orchestrator.branch_name),
+            Style::default().fg(DIMMER),
+        ),
+        Span::styled("    ", Style::default()),
+        Span::styled(
+            format!("{done}"),
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" done  ", Style::default().fg(DIM)),
+        Span::styled(
+            format!("{running}"),
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" running  ", Style::default().fg(DIM)),
+        Span::styled(
+            format!("{}", pending + blocked),
+            Style::default().fg(FG).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" pending  ", Style::default().fg(DIM)),
+        if failed > 0 {
+            Span::styled(
+                format!("{failed} failed  "),
+                Style::default().fg(RED).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("")
+        },
+        perms_indicator,
+        Span::styled(format!("  {elapsed}"), Style::default().fg(DIM)),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(line).style(Style::default().bg(BG_ALT)),
+        area,
+    );
+}
+
+fn orch_render_task_list(f: &mut Frame, app: &OrchApp, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(BORDER))
+        .title(Line::from(vec![Span::styled(
+            format!(" tasks · {}", app.orchestrator.tasks.len()),
+            Style::default().fg(DIM),
+        )]))
+        .style(Style::default().bg(BG_ALT));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.height < 2 {
+        return;
+    }
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    for (idx, task) in app.orchestrator.tasks.iter().enumerate() {
+        let is_selected = idx == app.selected_task;
+        let bg = if is_selected { BG_SELECT } else { BG_ALT };
+
+        let (dot_color, status_color) = match task.status {
+            TaskStatus::Pending => (DIM, DIM),
+            TaskStatus::Blocked => (DIMMER, DIMMER),
+            TaskStatus::Running => (CYAN, CYAN),
+            TaskStatus::Done => (GREEN, GREEN),
+            TaskStatus::Failed => (RED, RED),
+        };
+
+        let sel = if is_selected { "▸" } else { " " };
+
+        // Elapsed for this task
+        let task_elapsed = task
+            .started_at
+            .map(|s| {
+                let dur = task
+                    .finished_at
+                    .unwrap_or_else(Instant::now)
+                    .duration_since(s);
+                crate::util::format_duration(dur.as_secs())
+            })
+            .unwrap_or_else(|| "—".to_string());
+
+        // Row 1: status dot + name
+        lines.push(Line::from(vec![
+            Span::styled(sel, Style::default().fg(GREEN).bg(bg)),
+            Span::styled(
+                format!("{} ", task.status.symbol()),
+                Style::default().fg(dot_color).bg(bg),
+            ),
+            Span::styled(
+                task.def.name.clone(),
+                Style::default()
+                    .fg(if is_selected { GREEN_GLOW } else { FG })
+                    .bg(bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        // Row 2: status label + deps + elapsed
+        let deps_str = if task.def.depends_on.is_empty() {
+            String::new()
+        } else {
+            format!(" ← {}", task.def.depends_on.join(", "))
+        };
+        let max_deps = (inner.width as usize).saturating_sub(task_elapsed.len() + 14);
+        let deps_display: String = deps_str.chars().take(max_deps).collect();
+
+        lines.push(Line::from(vec![
+            Span::styled("  ", Style::default().bg(bg)),
+            Span::styled(
+                task.status.label().to_string(),
+                Style::default().fg(status_color).bg(bg),
+            ),
+            Span::styled(deps_display, Style::default().fg(DIMMER).bg(bg)),
+            Span::styled(
+                format!("  {}", task_elapsed),
+                Style::default().fg(DIM).bg(bg),
+            ),
+        ]));
+
+        // Separator
+        if (lines.len() as u16) < inner.height {
+            lines.push(Line::from(Span::styled(
+                "─".repeat(inner.width as usize),
+                Style::default().fg(BORDER_SOFT),
+            )));
+        }
+    }
+
+    f.render_widget(Paragraph::new(lines), inner);
+}
+
+fn orch_render_task_detail(f: &mut Frame, app: &mut OrchApp, area: Rect) {
+    let task = match app.orchestrator.tasks.get(app.selected_task) {
+        Some(t) => t,
+        None => {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(BORDER))
+                .title(" task detail ")
+                .style(Style::default().bg(BG_ALT));
+            f.render_widget(block, area);
+            return;
+        }
+    };
+
+    let title_color = match task.status {
+        TaskStatus::Running => CYAN,
+        TaskStatus::Done => GREEN,
+        TaskStatus::Failed => RED,
+        _ => DIM,
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(BORDER))
+        .title(Line::from(vec![
+            Span::styled(
+                format!(" {} ", task.status.symbol()),
+                Style::default().fg(title_color),
+            ),
+            Span::styled(
+                task.def.name.clone(),
+                Style::default().fg(FG).add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .style(Style::default().bg(BG_ALT));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.height < 4 {
+        return;
+    }
+
+    // Split: prompt (3 lines) + separator + output (rest)
+    let prompt_h = 3u16.min(inner.height / 3);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(prompt_h), // prompt preview
+            Constraint::Length(1),        // separator
+            Constraint::Min(3),           // stdout output
+        ])
+        .split(inner);
+
+    // Prompt preview
+    let prompt_lines: Vec<Line> = task
+        .def
+        .prompt
+        .lines()
+        .take(prompt_h as usize)
+        .map(|l| {
+            let max_w = chunks[0].width as usize;
+            let display: String = l.chars().take(max_w).collect();
+            Line::from(Span::styled(display, Style::default().fg(DIM)))
+        })
+        .collect();
+    f.render_widget(Paragraph::new(prompt_lines), chunks[0]);
+
+    // Separator
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "─".repeat(chunks[1].width as usize),
+            Style::default().fg(BORDER),
+        ))),
+        chunks[1],
+    );
+
+    // Output (scrolled to bottom)
+    let output_h = chunks[2].height as usize;
+    let total_lines = task.output_lines.len();
+    let start = total_lines.saturating_sub(output_h + app.scroll_offset as usize);
+    let end = start + output_h;
+
+    let output_lines: Vec<Line> = task
+        .output_lines
+        .iter()
+        .skip(start)
+        .take(end - start)
+        .map(|l| {
+            let max_w = chunks[2].width as usize;
+            let display: String = l.chars().take(max_w).collect();
+            let color = if l.starts_with("[stderr]") || l.starts_with("[relay error]") {
+                RED
+            } else {
+                FG
+            };
+            Line::from(Span::styled(display, Style::default().fg(color)))
+        })
+        .collect();
+
+    if output_lines.is_empty() {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                match task.status {
+                    TaskStatus::Pending | TaskStatus::Blocked => " waiting to start...",
+                    TaskStatus::Running => " running... output will appear here",
+                    TaskStatus::Done => " completed (no output captured)",
+                    TaskStatus::Failed => " failed (no output captured)",
+                },
+                Style::default().fg(DIMMER),
+            ))),
+            chunks[2],
+        );
+    } else {
+        f.render_widget(Paragraph::new(output_lines), chunks[2]);
+    }
+}
+
+fn orch_render_footer(f: &mut Frame, app: &OrchApp, area: Rect) {
+    if let Some((ref msg, at)) = app.status_msg {
+        if at.elapsed() < Duration::from_secs(4) {
+            let line = Line::from(Span::styled(format!(" {msg}"), Style::default().fg(GREEN)));
+            f.render_widget(
+                Paragraph::new(line).style(Style::default().bg(BG_ALT)),
+                area,
+            );
+            return;
+        }
+    }
+
+    let keys: &[(&str, &str)] = if app.finished {
+        &[("q", "quit")]
+    } else {
+        &[("j/k", "select"), ("a", "abort all"), ("q", "quit")]
+    };
+
+    let mut spans = Vec::new();
+    for (key, label) in keys {
+        spans.push(Span::styled(
+            format!(" {} ", key),
+            Style::default().fg(FG).bg(Color::Rgb(20, 20, 20)),
+        ));
+        spans.push(Span::styled(
+            format!("{} ", label),
+            Style::default().fg(DIM),
+        ));
+    }
+
+    let on_complete = &app.orchestrator.plan.plan.on_complete;
+    let right = format!("on_complete: {on_complete}");
+    let spans_len: usize = spans.iter().map(|s| s.content.len()).sum();
+    let pad = (area.width as usize).saturating_sub(spans_len + right.len());
+    spans.push(Span::raw(" ".repeat(pad)));
+    spans.push(Span::styled(right, Style::default().fg(DIMMER)));
+
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_ALT)),
+        area,
+    );
 }

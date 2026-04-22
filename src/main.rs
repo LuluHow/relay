@@ -3,6 +3,7 @@ mod git;
 mod handoff;
 mod hooks;
 mod notify;
+mod orchestrator;
 mod parser;
 mod session;
 mod statusline;
@@ -10,7 +11,7 @@ mod storage;
 mod tui;
 mod util;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -50,6 +51,17 @@ enum Commands {
     TestNotify,
     /// Remove all traces of relay (config, hooks, shell wrapper, binary)
     Uninstall,
+    /// Orchestrate multiple Claude sessions from a plan file
+    Orchestrate {
+        /// Path to the plan TOML file
+        plan: Option<String>,
+        /// Interactively create a new plan file
+        #[arg(long)]
+        create_plan: bool,
+        /// Output path for --create-plan (default: plan.toml)
+        #[arg(short, long, default_value = "plan.toml")]
+        output: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -124,6 +136,41 @@ fn main() -> Result<()> {
         }
         Commands::Uninstall => {
             config::uninstall()?;
+        }
+        Commands::Orchestrate {
+            plan,
+            create_plan,
+            output,
+        } => {
+            if create_plan {
+                let output_path = std::path::Path::new(&output);
+                return orchestrator::create_plan_interactive(output_path);
+            }
+
+            let plan_file = plan.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Missing plan file. Usage:\n  relay orchestrate <plan.toml>\n  relay orchestrate --create-plan"
+                )
+            })?;
+            let plan_path = std::path::Path::new(&plan_file);
+            let loaded = orchestrator::load_plan(plan_path)?;
+            let project_root =
+                std::env::current_dir().context("Cannot determine current directory")?;
+            if !git::is_git_repo(&project_root.to_string_lossy()) {
+                anyhow::bail!(
+                    "Not a git repository: {}. Orchestration requires git for worktrees.",
+                    project_root.display()
+                );
+            }
+            println!(
+                "  ▸ plan '{}' — {} tasks",
+                loaded.plan.name,
+                loaded.tasks.len()
+            );
+            if loaded.plan.skip_permissions {
+                println!("  ⚠ skip_permissions is ON — tasks run without permission checks");
+            }
+            return tui::run_orchestrate(loaded, project_root);
         }
     }
 
