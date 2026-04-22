@@ -14,7 +14,8 @@ fn infer_window(model: &str, observed: u64) -> u64 {
 
 /// Detect messages that are relay handoff context (injected by auto-handoff)
 fn is_relay_handoff(content: &str) -> bool {
-    let start = &content[..content.len().min(200)];
+    let end = content.floor_char_boundary(content.len().min(200));
+    let start = &content[..end];
     start.contains("auto-handoff by relay")
         || start.contains("# Handoff —")
         || start.starts_with("Context from a previous session")
