@@ -8,6 +8,7 @@ mod session;
 mod statusline;
 mod storage;
 mod tui;
+mod util;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

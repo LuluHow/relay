@@ -19,6 +19,7 @@ use crate::parser::{self, ParsedSession};
 use crate::session::{self, SessionInfo};
 use crate::statusline::{self, SessionStatus};
 use crate::storage;
+use crate::util;
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
@@ -68,6 +69,9 @@ struct App {
     status_msg: Option<(String, Instant)>,
     // Auto-handoff
     config: Config,
+    // Runtime overrides for toggleable settings (persist across config reloads)
+    auto_handoff_override: Option<bool>,
+    auto_commit_override: Option<bool>,
     triggered_sessions: HashSet<String>,
     // Sessions pending handoff (waiting for Stop event before triggering)
     pending_handoffs: HashSet<String>,
@@ -101,6 +105,8 @@ impl App {
             last_refresh: Instant::now() - Duration::from_secs(100),
             status_msg: None,
             config,
+            auto_handoff_override: None,
+            auto_commit_override: None,
             triggered_sessions: HashSet::new(),
             pending_handoffs: HashSet::new(),
             statuses: HashMap::new(),
@@ -111,7 +117,23 @@ impl App {
         app
     }
 
+    /// Effective auto_handoff value (runtime override > config file)
+    fn auto_handoff(&self) -> bool {
+        self.auto_handoff_override
+            .unwrap_or(self.config.auto_handoff)
+    }
+
+    /// Effective auto_commit value (runtime override > config file)
+    fn auto_commit(&self) -> bool {
+        self.auto_commit_override.unwrap_or(self.config.auto_commit)
+    }
+
     fn refresh(&mut self) {
+        // Hot-reload config from disk (runtime overrides are preserved separately)
+        if let Ok(new_config) = crate::config::load() {
+            self.config = new_config;
+        }
+
         if let Ok(sessions) = session::discover_sessions() {
             self.sessions = sessions
                 .into_iter()
@@ -258,7 +280,7 @@ impl App {
     }
 
     fn check_auto_handoff(&mut self) {
-        if !self.config.auto_handoff {
+        if !self.auto_handoff() {
             return;
         }
 
@@ -323,7 +345,7 @@ impl App {
 
     fn trigger_handoff(&mut self, info: &SessionInfo, parsed: &ParsedSession) {
         // Auto-commit before handoff if enabled
-        if self.config.auto_commit && self.config.commit_before_handoff {
+        if self.auto_commit() && self.config.commit_before_handoff {
             let status = self.statuses.get(&info.session_id).cloned();
             let cwd = status
                 .as_ref()
@@ -375,10 +397,11 @@ impl App {
                 return;
             }
         };
-        if let Err(e) = std::fs::write(&next_prompt_path, &prompt) {
+        if let Err(e) = util::write_atomic(&next_prompt_path, prompt.as_bytes()) {
             self.status_msg = Some((format!("write next_prompt: {e}"), Instant::now()));
             return;
         }
+        util::set_private_permissions(&next_prompt_path);
 
         // Find and kill Claude
         let killed = if let Some(pid) = find_claude_pid(&info.jsonl_path) {
@@ -441,7 +464,7 @@ impl App {
     // ── Git auto-commit ────────────────────────────────────────────────────
 
     fn check_auto_commit(&mut self) {
-        if !self.config.auto_commit {
+        if !self.auto_commit() {
             return;
         }
 
@@ -474,31 +497,47 @@ impl App {
 
     fn check_pending_restart(&mut self) {
         let pending = match &self.pending_restart {
-            Some(p) if Instant::now() >= p.restart_at => PendingRestart {
-                cwd: p.cwd.clone(),
-                restart_at: p.restart_at,
-            },
-            _ => return,
+            Some(p) => p,
+            None => return,
         };
-        self.pending_restart = None;
 
         let next_prompt = match dirs::home_dir() {
             Some(h) => h.join(".relay").join("next_prompt"),
             None => return,
         };
 
+        // Check if wrapper already consumed next_prompt (before timeout)
         if !next_prompt.exists() {
-            // Wrapper consumed it — restart handled
+            self.pending_restart = None;
             self.status_msg = Some(("wrapper restarted session".to_string(), Instant::now()));
             return;
         }
 
-        // Wrapper didn't handle it — spawn claude in a new terminal
-        if spawn_claude_in_terminal(&pending.cwd) {
-            self.status_msg = Some(("spawned claude in new terminal".to_string(), Instant::now()));
+        // Not yet timed out — show countdown
+        if Instant::now() < pending.restart_at {
+            let remaining = pending.restart_at.duration_since(Instant::now()).as_secs();
+            self.status_msg = Some((
+                format!(
+                    "waiting for wrapper to restart... {}s (source ~/.relay/claude-wrapper.sh)",
+                    remaining
+                ),
+                Instant::now(),
+            ));
+            return;
+        }
+
+        // Timed out — wrapper didn't handle it, try fallback
+        let cwd = pending.cwd.clone();
+        self.pending_restart = None;
+
+        if spawn_claude_in_terminal(&cwd) {
+            self.status_msg = Some((
+                "wrapper not active — spawned claude in new terminal".to_string(),
+                Instant::now(),
+            ));
         } else {
             self.status_msg = Some((
-                "restart failed — source ~/.relay/claude-wrapper.sh or run relay restore"
+                "restart failed — run: source ~/.relay/claude-wrapper.sh && relay restore"
                     .to_string(),
                 Instant::now(),
             ));
@@ -543,7 +582,7 @@ impl App {
 // ── Auto-handoff helpers ────────────────────────────────────────────────────
 
 fn context_pct(parsed: &ParsedSession) -> u8 {
-    let window = context_window(&parsed.model, parsed.current_context_tokens);
+    let window = util::context_window(&parsed.model, parsed.current_context_tokens);
     if window > 0 {
         (parsed.current_context_tokens as f64 / window as f64 * 100.0) as u8
     } else {
@@ -606,7 +645,7 @@ fn spawn_claude_in_terminal(cwd: &str) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&restart_script, std::fs::Permissions::from_mode(0o755));
+        let _ = std::fs::set_permissions(&restart_script, std::fs::Permissions::from_mode(0o700));
     }
 
     #[cfg(target_os = "macos")]
@@ -747,14 +786,22 @@ fn handle_key(app: &mut App, key: event::KeyEvent) {
             app.status_msg = Some(("✓ Refreshed".to_string(), Instant::now()));
         }
         KeyCode::Char('a') => {
-            app.config.auto_handoff = !app.config.auto_handoff;
-            let state = if app.config.auto_handoff { "ON" } else { "OFF" };
-            app.status_msg = Some((format!("auto-handoff {state}"), Instant::now()));
+            let new_val = !app.auto_handoff();
+            app.auto_handoff_override = Some(new_val);
+            let state = if new_val { "ON" } else { "OFF" };
+            app.status_msg = Some((
+                format!("auto-handoff {state} (runtime override)"),
+                Instant::now(),
+            ));
         }
         KeyCode::Char('g') => {
-            app.config.auto_commit = !app.config.auto_commit;
-            let state = if app.config.auto_commit { "ON" } else { "OFF" };
-            app.status_msg = Some((format!("git auto-commit {state}"), Instant::now()));
+            let new_val = !app.auto_commit();
+            app.auto_commit_override = Some(new_val);
+            let state = if new_val { "ON" } else { "OFF" };
+            app.status_msg = Some((
+                format!("git auto-commit {state} (runtime override)"),
+                Instant::now(),
+            ));
         }
         KeyCode::Char('d') => app.show_detail = !app.show_detail,
         KeyCode::Char('i') => app.toggle_idle(),
@@ -810,13 +857,13 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         format!("{idle} idle")
     };
 
-    let auto_label = if app.config.auto_handoff {
-        format!("│ auto {}% ", app.config.threshold)
+    let (auto_text, auto_color) = if app.auto_handoff() {
+        (format!("│ auto {}% ", app.config.threshold), GREEN)
     } else {
-        String::new()
+        ("│ auto OFF ".to_string(), RED)
     };
 
-    let git_label = if app.config.auto_commit {
+    let git_label = if app.auto_commit() {
         "│ git ✓ ".to_string()
     } else {
         String::new()
@@ -824,10 +871,22 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 
     let now = chrono::Local::now().format("%H:%M").to_string();
 
-    let title = format!(
-        " ◉ relay  {} active · {} │ ~${:.2} total {auto_label}{git_label}│ {} ",
-        active, idle_label, agg_cost, now,
-    );
+    let bold_cyan = Style::default().fg(CYAN).add_modifier(Modifier::BOLD);
+    let title_line = Line::from(vec![
+        Span::styled(
+            format!(
+                " ◉ relay  {} active · {} │ ~${:.2} total ",
+                active, idle_label, agg_cost
+            ),
+            bold_cyan,
+        ),
+        Span::styled(
+            auto_text,
+            Style::default().fg(auto_color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(git_label, bold_cyan),
+        Span::styled(format!("│ {} ", now), bold_cyan),
+    ]);
 
     let titles = vec!["Sessions", "Handoffs"];
     let selected = match app.tab {
@@ -840,10 +899,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER))
-                .title(Span::styled(
-                    title,
-                    Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-                )),
+                .title(title_line),
         )
         .select(selected)
         .style(Style::default().fg(DIM))
@@ -942,7 +998,7 @@ fn render_context_panel(
         let w = s.context_window_size.unwrap_or(200_000);
         (p, w)
     } else {
-        let w = context_window(&parsed.model, parsed.current_context_tokens);
+        let w = util::context_window(&parsed.model, parsed.current_context_tokens);
         let p = if w > 0 {
             (parsed.current_context_tokens as f64 / w as f64 * 100.0) as u8
         } else {
@@ -1044,15 +1100,15 @@ fn render_usage_panel(
 
     // Duration
     if let Some(s) = status {
-        let dur = format_duration(s.duration_ms / 1000);
-        let api_dur = format_duration(s.api_duration_ms / 1000);
+        let dur = util::format_duration(s.duration_ms / 1000);
+        let api_dur = util::format_duration(s.api_duration_ms / 1000);
         lines.push(Line::from(vec![
             Span::styled(" Time ", Style::default().fg(DIM)),
             Span::styled(dur, Style::default().fg(WHITE)),
             Span::styled(format!(" (api {})", api_dur), Style::default().fg(DIMMER)),
         ]));
     } else {
-        let age = format_duration(parsed.age_secs);
+        let age = util::format_duration(parsed.age_secs);
         lines.push(Line::from(vec![
             Span::styled(" Time ", Style::default().fg(DIM)),
             Span::styled(age, Style::default().fg(WHITE)),
@@ -1142,7 +1198,7 @@ fn render_session_info_panel(
         .filter(|s| !s.model_name.is_empty())
         .map(|s| s.model_name.clone())
         .unwrap_or_else(|| parsed.model.replace("claude-", ""));
-    let age = format_duration(parsed.age_secs);
+    let age = util::format_duration(parsed.age_secs);
 
     let mut lines = Vec::new();
 
@@ -1288,7 +1344,7 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
                 .and_then(|s| s.context_used_pct)
                 .map(|p| p as u8)
                 .unwrap_or_else(|| {
-                    let w = context_window(&parsed.model, parsed.current_context_tokens);
+                    let w = util::context_window(&parsed.model, parsed.current_context_tokens);
                     if w > 0 {
                         (parsed.current_context_tokens as f64 / w as f64 * 100.0) as u8
                     } else {
@@ -1333,7 +1389,7 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
                 .map(|s| format!("+{}-{}", s.lines_added, s.lines_removed))
                 .unwrap_or_else(|| "–".to_string());
 
-            let age = format_duration(parsed.age_secs);
+            let age = util::format_duration(parsed.age_secs);
 
             Row::new(vec![
                 Cell::from(dot).style(Style::default().fg(dot_color)),
@@ -1600,7 +1656,7 @@ fn render_handoffs(f: &mut Frame, app: &mut App, area: Rect) {
 // ── Footer ──────────────────────────────────────────────────────────────────
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
-    let (text, color) = if let Some((ref msg, at)) = app.status_msg {
+    let (left_text, left_color) = if let Some((ref msg, at)) = app.status_msg {
         if at.elapsed() < Duration::from_secs(4) {
             (format!(" {msg}"), GREEN)
         } else {
@@ -1610,8 +1666,21 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         (keybindings_text(), DIM)
     };
 
-    let footer = Paragraph::new(text).style(Style::default().fg(color));
-    f.render_widget(footer, area);
+    let right_text = format!("v{} │ github.com/LuluHow/relay ", env!("CARGO_PKG_VERSION"));
+    let right_w = right_text.len() as u16;
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(right_w)])
+        .split(area);
+
+    let left = Paragraph::new(left_text).style(Style::default().fg(left_color));
+    let right = Paragraph::new(right_text)
+        .style(Style::default().fg(DIMMER))
+        .alignment(Alignment::Right);
+
+    f.render_widget(left, cols[0]);
+    f.render_widget(right, cols[1]);
 }
 
 fn keybindings_text() -> String {
@@ -1725,15 +1794,6 @@ fn dual_bar(
     Line::from(spans)
 }
 
-fn context_window(model: &str, observed: u64) -> u64 {
-    let m = model.to_lowercase();
-    if m.contains("[1m]") || m.contains("opus") || observed > 180_000 {
-        1_000_000
-    } else {
-        200_000
-    }
-}
-
 fn estimate_cost(parsed: &ParsedSession) -> f64 {
     let m = parsed.model.to_lowercase();
     let (in_rate, out_rate, cache_rate) = if m.contains("opus") {
@@ -1750,18 +1810,6 @@ fn estimate_cost(parsed: &ParsedSession) -> f64 {
     let create_cost = parsed.total_cache_create as f64 / 1_000_000.0 * in_rate * 1.25;
 
     in_cost + out_cost + cache_cost + create_cost
-}
-
-fn format_duration(secs: u64) -> String {
-    if secs < 60 {
-        format!("{secs}s")
-    } else if secs < 3600 {
-        format!("{}m", secs / 60)
-    } else if secs < 86400 {
-        format!("{}h", secs / 3600)
-    } else {
-        format!("{}d", secs / 86400)
-    }
 }
 
 fn format_tokens(n: u64) -> String {

@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use crate::util;
+
 // ── Paths ──────────────────────────────────────────────────────────────────
 
 fn events_dir() -> Option<PathBuf> {
@@ -10,14 +12,6 @@ fn events_dir() -> Option<PathBuf> {
 
 fn hooks_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".relay").join("hooks"))
-}
-
-fn claude_settings_path() -> Option<PathBuf> {
-    let dir = std::env::var("CLAUDE_CONFIG_DIR")
-        .ok()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".claude"));
-    Some(dir.join("settings.json"))
 }
 
 // ── Hook script ────────────────────────────────────────────────────────────
@@ -93,14 +87,14 @@ pub fn ensure_hooks() -> bool {
     let Some(hooks_path) = hooks_dir() else {
         return false;
     };
-    let Some(settings_path) = claude_settings_path() else {
+    let Some(settings_path) = util::claude_settings_path() else {
         return false;
     };
 
     let script_path = hooks_path.join("stop.sh");
     let our_command = format!("bash {}", script_path.display());
 
-    // Read existing settings
+    // Read existing settings (with file lock)
     let mut settings: serde_json::Value = if settings_path.exists() {
         std::fs::read_to_string(&settings_path)
             .ok()
@@ -142,7 +136,7 @@ pub fn ensure_hooks() -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
+        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o700));
     }
 
     if already_installed {
@@ -173,7 +167,7 @@ pub fn ensure_hooks() -> bool {
     }
 
     if let Ok(json) = serde_json::to_string_pretty(&settings) {
-        let _ = std::fs::write(&settings_path, json);
+        let _ = util::write_atomic(&settings_path, json.as_bytes());
     }
 
     // Ensure events dir exists
@@ -206,7 +200,7 @@ pub fn read_stop_events() -> Vec<StopEvent> {
         }
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(event) = serde_json::from_str::<StopEvent>(&content) {
-                if !event.session_id.is_empty() {
+                if util::is_valid_session_id(&event.session_id) {
                     events.push(event);
                 }
             }
@@ -217,6 +211,9 @@ pub fn read_stop_events() -> Vec<StopEvent> {
 
 /// Remove the signal file for a session after processing.
 pub fn clear_event(session_id: &str) {
+    if !util::is_valid_session_id(session_id) {
+        return;
+    }
     if let Some(dir) = events_dir() {
         let path = dir.join(format!("{session_id}_stop.json"));
         let _ = std::fs::remove_file(path);

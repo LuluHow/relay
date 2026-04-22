@@ -2,6 +2,7 @@ use anyhow::Result;
 use chrono::Utc;
 
 use crate::parser::{ConversationTurn, ParsedSession};
+use crate::util;
 
 /// Detect messages that are relay handoff context (injected by auto-handoff)
 fn is_relay_handoff(content: &str) -> bool {
@@ -131,8 +132,8 @@ pub fn generate(session: &ParsedSession) -> Result<String> {
     md.push_str("---\n\n");
     md.push_str("*To restore this context, run:*\n");
     md.push_str(&format!(
-        "```\nrelay restore {} | pbcopy\n```\n",
-        &session.session_id[..8]
+        "```\nrelay restore {}\n```\n",
+        util::short_session_id(&session.session_id)
     ));
 
     Ok(md)
