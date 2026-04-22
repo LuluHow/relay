@@ -193,19 +193,15 @@ pub fn parse_session(session: &SessionInfo) -> Result<ParsedSession> {
                     }
 
                     let content = extract_text_content(&msg.content);
-                    // Only track real user messages (not tool results)
-                    if msg.role == "user" && !content.is_empty() && raw.parent_uuid.is_none()
-                        || (raw.parent_uuid.is_some()
-                            && content.len() > 5
-                            && !content.starts_with('['))
+                    // Track real user messages (skip tool results and empty content)
+                    if msg.role == "user"
+                        && !content.is_empty()
+                        && !content.starts_with('[')
                     {
-                        // Heuristic: real user prompts are typically longer and at root
-                        if content.len() > 2 {
-                            parsed.user_messages.push(ConversationTurn {
-                                content,
-                                timestamp: raw.timestamp.clone(),
-                            });
-                        }
+                        parsed.user_messages.push(ConversationTurn {
+                            content,
+                            timestamp: raw.timestamp.clone(),
+                        });
                     }
                 }
             }
