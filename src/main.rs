@@ -44,6 +44,8 @@ enum Commands {
     Status,
     /// Create default config file at ~/.relay/config.toml
     Init,
+    /// Remove all traces of relay (config, hooks, shell wrapper, binary)
+    Uninstall,
 }
 
 fn main() -> Result<()> {
@@ -100,6 +102,9 @@ fn main() -> Result<()> {
             }
             println!();
             println!("Then set auto_handoff = true in ~/.relay/config.toml");
+        }
+        Commands::Uninstall => {
+            config::uninstall()?;
         }
     }
 

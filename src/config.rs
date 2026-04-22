@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -129,4 +130,108 @@ pub fn ensure_default() -> Result<PathBuf> {
     std::fs::write(&wrapper, SHELL_WRAPPER)?;
 
     Ok(p)
+}
+
+/// Remove all traces of relay from the system.
+pub fn uninstall() -> Result<()> {
+    let home = dirs::home_dir().context("No home directory")?;
+    let relay_dir = home.join(".relay");
+
+    // 1. Clean relay hooks from ~/.claude/settings.json
+    let claude_settings = std::env::var("CLAUDE_CONFIG_DIR")
+        .ok()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".claude"))
+        .join("settings.json");
+
+    if claude_settings.exists() {
+        if let Ok(content) = std::fs::read_to_string(&claude_settings) {
+            if let Ok(mut settings) = serde_json::from_str::<serde_json::Value>(&content) {
+                let mut changed = false;
+
+                // Remove relay entries from hooks.Stop
+                if let Some(stop_arr) = settings
+                    .get_mut("hooks")
+                    .and_then(|h| h.get_mut("Stop"))
+                    .and_then(|a| a.as_array_mut())
+                {
+                    let before = stop_arr.len();
+                    stop_arr.retain(|entry| {
+                        !entry
+                            .get("hooks")
+                            .and_then(|h| h.as_array())
+                            .map(|hooks| {
+                                hooks.iter().any(|hook| {
+                                    hook.get("command")
+                                        .and_then(|c| c.as_str())
+                                        .map(|c| c.contains(".relay/"))
+                                        .unwrap_or(false)
+                                })
+                            })
+                            .unwrap_or(false)
+                    });
+                    if stop_arr.len() != before {
+                        changed = true;
+                    }
+                }
+
+                // Remove statusLine if it points to relay
+                if let Some(sl) = settings.get("statusLine") {
+                    if sl
+                        .get("command")
+                        .and_then(|c| c.as_str())
+                        .map(|c| c.contains(".relay/"))
+                        .unwrap_or(false)
+                    {
+                        settings.as_object_mut().unwrap().remove("statusLine");
+                        changed = true;
+                    }
+                }
+
+                if changed {
+                    if let Ok(json) = serde_json::to_string_pretty(&settings) {
+                        let _ = std::fs::write(&claude_settings, json);
+                    }
+                    println!("  {} cleaned Claude Code hooks", "✓".green());
+                }
+            }
+        }
+    }
+
+    // 2. Remove source line from shell rc files
+    let source_line = "source ~/.relay/claude-wrapper.sh";
+    for rc in &[".zshrc", ".bashrc"] {
+        let rc_path = home.join(rc);
+        if rc_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&rc_path) {
+                if content.contains(source_line) {
+                    let cleaned: String = content
+                        .lines()
+                        .filter(|l| !l.contains(source_line) && !l.contains("# relay"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let _ = std::fs::write(&rc_path, cleaned.trim_end().to_string() + "\n");
+                    println!("  {} cleaned ~/{rc}", "✓".green());
+                }
+            }
+        }
+    }
+
+    // 3. Remove ~/.relay/ directory
+    if relay_dir.exists() {
+        std::fs::remove_dir_all(&relay_dir)?;
+        println!("  {} removed ~/.relay/", "✓".green());
+    }
+
+    // 4. Remove the binary itself
+    if let Ok(exe) = std::env::current_exe() {
+        println!("  {} removing {}", "✓".green(), exe.display());
+        // On Unix, a running binary can delete itself
+        let _ = std::fs::remove_file(&exe);
+    }
+
+    println!();
+    println!("  relay has been uninstalled. Restart your shell to complete.");
+
+    Ok(())
 }
