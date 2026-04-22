@@ -2,6 +2,7 @@ mod config;
 mod git;
 mod handoff;
 mod hooks;
+mod notify;
 mod parser;
 mod session;
 mod statusline;
@@ -44,6 +45,8 @@ enum Commands {
     Status,
     /// Create default config file at ~/.relay/config.toml
     Init,
+    /// Send a test notification to configured webhooks (Discord, Slack)
+    TestNotify,
     /// Remove all traces of relay (config, hooks, shell wrapper, binary)
     Uninstall,
 }
@@ -102,6 +105,21 @@ fn main() -> Result<()> {
             }
             println!();
             println!("Then set auto_handoff = true in ~/.relay/config.toml");
+        }
+        Commands::TestNotify => {
+            let cfg = config::load()?;
+            let results = notify::test(&cfg);
+            if results.is_empty() {
+                println!("No webhooks configured in ~/.relay/config.toml");
+                println!("Set discord_webhook or slack_webhook and try again.");
+            } else {
+                for (name, result) in results {
+                    match result {
+                        Ok(()) => println!("  \u{2713} {name}: sent"),
+                        Err(e) => println!("  \u{2717} {name}: {e}"),
+                    }
+                }
+            }
         }
         Commands::Uninstall => {
             config::uninstall()?;

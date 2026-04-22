@@ -26,6 +26,10 @@ pub struct Config {
     pub commit_prefix: String,
     /// Play terminal bell on handoff / auto-commit (default: true)
     pub sound: bool,
+    /// Discord webhook URL for handoff notifications (default: none)
+    pub discord_webhook: Option<String>,
+    /// Slack webhook URL for handoff notifications (default: none)
+    pub slack_webhook: Option<String>,
 }
 
 impl Default for Config {
@@ -41,6 +45,8 @@ impl Default for Config {
             commit_before_handoff: true,
             commit_prefix: "relay".to_string(),
             sound: true,
+            discord_webhook: None,
+            slack_webhook: None,
         }
     }
 }
@@ -80,6 +86,14 @@ commit_prefix = \"relay\"
 
 # Play terminal bell sound on handoff / auto-commit
 sound = true
+
+# Discord webhook URL for handoff notifications (optional)
+# Create one at: Discord > Server Settings > Integrations > Webhooks
+# discord_webhook = \"https://discord.com/api/webhooks/...\"
+
+# Slack webhook URL for handoff notifications (optional)
+# Create one at: https://api.slack.com/messaging/webhooks
+# slack_webhook = \"https://hooks.slack.com/services/...\"
 ";
 
 const SHELL_WRAPPER: &str = r#"# relay — Claude Code wrapper for auto-handoff

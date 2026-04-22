@@ -410,6 +410,9 @@ impl App {
             }
         }
 
+        // Webhook notifications (Discord, Slack)
+        crate::notify::send_handoff(&self.config, &reason, killed);
+
         self.triggered_sessions.insert(info.session_id.clone());
         self.handoffs = load_handoffs();
 

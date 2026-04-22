@@ -65,6 +65,7 @@ relay save         # Save handoff for most recent session
 relay list         # List saved handoffs
 relay restore <id> # Print handoff to stdout
 relay init         # Create config + shell wrapper
+relay test-notify  # Test Discord/Slack webhook notifications
 relay --version    # Show version
 ```
 
@@ -112,6 +113,37 @@ commit_prefix = "relay"
 
 # Terminal bell on handoff / auto-commit
 sound = true
+
+# Discord webhook URL for handoff notifications (optional)
+# discord_webhook = "https://discord.com/api/webhooks/..."
+
+# Slack webhook URL for handoff notifications (optional)
+# slack_webhook = "https://hooks.slack.com/services/..."
+```
+
+### Webhook notifications (Discord / Slack)
+
+relay can send a message to Discord or Slack whenever a handoff is triggered.
+
+**Discord setup:**
+1. In your Discord server, go to **Server Settings > Integrations > Webhooks**
+2. Click **New Webhook**, choose a channel, copy the URL
+3. Add to config:
+   ```toml
+   discord_webhook = "https://discord.com/api/webhooks/..."
+   ```
+
+**Slack setup:**
+1. Create an [Incoming Webhook](https://api.slack.com/messaging/webhooks) for your workspace
+2. Copy the webhook URL
+3. Add to config:
+   ```toml
+   slack_webhook = "https://hooks.slack.com/services/..."
+   ```
+
+**Test your setup:**
+```bash
+relay test-notify
 ```
 
 ## Platform support
