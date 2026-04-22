@@ -10,6 +10,7 @@ use axum::{
     body::Body,
     extract::Request,
     http::{header, StatusCode},
+    middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -78,11 +79,14 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
         .route("/api/config", get(routes::get_config))
         .route("/api/ws", get(ws::handler))
         .fallback(static_handler)
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            auth::auth_middleware,
+        ))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
-    println!("relay API listening on http://{bind}");
     axum::serve(listener, app).await?;
 
     Ok(())

@@ -103,6 +103,11 @@ sound = true
 # Slack webhook URL for handoff notifications (optional)
 # Create one at: https://api.slack.com/messaging/webhooks
 # slack_webhook = \"https://hooks.slack.com/services/...\"
+
+# API server
+# api_port = 4747
+# api_bind = \"127.0.0.1\"
+# api_token = \"your-secret-token\"
 ";
 
 const SHELL_WRAPPER: &str = r#"# relay — Claude Code wrapper for auto-handoff
