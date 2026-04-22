@@ -12,6 +12,7 @@ When Claude Code approaches its context limit, relay saves the session state as 
 - **Git auto-commit** — commits work before handoff so nothing is lost
 - **Hook integration** — installs Claude Code hooks (Stop, statusLine) automatically
 - **Shell wrapper** — transparent `claude` wrapper that handles restart loops
+- **Multi-task orchestration** — decompose work into a plan, run tasks sequentially with dependency resolution
 - **Discord / Slack notifications** — webhook alerts on every handoff
 
 ## Install
@@ -60,15 +61,17 @@ relay init
 ## Usage
 
 ```bash
-relay              # Launch TUI (default)
-relay status       # Show active sessions
-relay save         # Save handoff for most recent session
-relay list         # List saved handoffs
-relay restore <id> # Print handoff to stdout
-relay init         # Create config + shell wrapper
-relay test-notify  # Test Discord/Slack webhook notifications
-relay uninstall    # Remove all traces of relay
-relay --version    # Show version
+relay                                  # Launch TUI (default)
+relay status                           # Show active sessions
+relay save                             # Save handoff for most recent session
+relay list                             # List saved handoffs
+relay restore <id>                     # Print handoff to stdout
+relay orchestrate plan.toml            # Run multi-task orchestration
+relay orchestrate --create-plan        # Create a plan interactively
+relay init                             # Create config + shell wrapper
+relay test-notify                      # Test Discord/Slack webhook notifications
+relay uninstall                        # Remove all traces of relay
+relay --version                        # Show version
 ```
 
 ### TUI keybindings
@@ -152,6 +155,93 @@ relay can send a message to Discord or Slack whenever a handoff is triggered.
 ```bash
 relay test-notify
 ```
+
+## Multi-task orchestration
+
+Relay can orchestrate multiple Claude Code sessions sequentially from a plan file. Each task runs in an isolated git worktree, and the results are merged or submitted as a PR when done.
+
+### Quick start
+
+```bash
+# Create a plan interactively
+relay orchestrate --create-plan
+
+# Or create a plan interactively with a custom output path
+relay orchestrate --create-plan -o my-plan.toml
+
+# Run an existing plan
+relay orchestrate plan.toml
+```
+
+### Plan format (`plan.toml`)
+
+```toml
+[plan]
+name = "api-build"
+branch = "feat/api"             # git branch for the worktree
+model = "claude-sonnet-4-6"     # default model for all tasks (optional)
+on_complete = "pr"              # manual | merge | pr
+skip_permissions = false        # skip Claude permission prompts (use with caution)
+
+[[tasks]]
+name = "init"
+prompt = "Initialize Express.js project with TypeScript"
+
+[[tasks]]
+name = "routes"
+prompt = "Create REST API routes for /users and /posts"
+depends_on = ["init"]
+model = "claude-sonnet-4-6"     # override model for this task (optional)
+
+[[tasks]]
+name = "tests"
+prompt = "Write integration tests for all routes"
+depends_on = ["routes"]
+allowed_tools = "Read,Grep,Edit,Write,Bash"  # restrict available tools (optional)
+```
+
+### How it works
+
+1. Relay creates a git worktree (`.worktrees/<plan-name>`) and a new branch
+2. Tasks run sequentially — each as a `claude -p` session in the worktree
+3. Dependencies are resolved automatically (blocked tasks wait for their deps)
+4. If a task fails, all tasks that depend on it are marked as failed too
+5. When all tasks complete, relay runs the `on_complete` action:
+   - **manual** — branch is ready, checkout and merge when you want
+   - **merge** — auto-merges the branch into your current branch
+   - **pr** — pushes the branch and creates a GitHub pull request (requires `gh` CLI)
+6. The worktree is always cleaned up automatically after completion
+
+### Orchestration TUI
+
+During orchestration, relay displays a dedicated TUI showing task progress:
+
+| Key | Action |
+|-----|--------|
+| `j/k` or `↑/↓` | Navigate tasks |
+| `a` | Abort all tasks |
+| `q` | Quit |
+
+### Interactive plan creation
+
+```bash
+relay orchestrate --create-plan
+```
+
+The wizard prompts for:
+- **Plan metadata** — name, branch, model, on_complete, skip_permissions
+- **Tasks** — name, prompt (multi-line), model, dependencies, allowed tools
+- Validates task names and dependencies as you go
+
+### Claude Code skill
+
+Relay ships a Claude Code skill (`SKILL.md`) that helps decompose complex tasks into orchestration plans. When loaded, Claude can:
+
+- Analyze your codebase and break a large task into ordered sub-tasks
+- Generate valid `plan.toml` files with proper dependencies
+- Guide you through model selection, `on_complete` strategy, and prompt writing
+
+To use it, reference the skill in your Claude Code configuration or invoke it with `/relay-orchestrate`.
 
 ## Platform support
 

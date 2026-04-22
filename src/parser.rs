@@ -218,7 +218,7 @@ pub fn parse_session(session: &SessionInfo) -> Result<ParsedSession> {
                         parsed.total_cache_read += u.cache_read_input_tokens;
                         parsed.total_cache_create += u.cache_creation_input_tokens;
 
-                        // Current context = input + cache_read (exclude cache_create to avoid double-count)
+                        // Current context = input + cache_read (exclude cache_create)
                         let ctx = u.input_tokens + u.cache_read_input_tokens;
                         if ctx > 0 {
                             parsed.current_context_tokens = ctx;
