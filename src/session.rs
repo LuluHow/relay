@@ -228,7 +228,7 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
     }
 
     // Sort by most recently modified first
-    sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
+    sessions.sort_by_key(|b| std::cmp::Reverse(b.modified));
     Ok(sessions)
 }
 
