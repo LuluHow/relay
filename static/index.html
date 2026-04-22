@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>relay</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a0a0a;
+      --bg-alt:     #0f0f0f;
+      --text:       #d7d7d7;
+      --dim:        #8a8a8a;
+      --muted:      #555555;
+      --green:      #7fd17f;
+      --green-glow: #a8e8a8;
+      --amber:      #d4b36a;
+      --red:        #d17f7f;
+      --cyan:       #7fc8d1;
+      --violet:     #b39cd1;
+      --border:     #242424;
+      --sel-bg:     #16221a;
+      --font:       ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--green);
+      letter-spacing: 0.06em;
+    }
+
+    .version {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .ws-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    .ws-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .ws-dot.connected    { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .ws-dot.reconnecting { background: var(--amber); }
+    .ws-dot.disconnected { background: var(--red); }
+
+    /* ── Two-column layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      overflow: hidden;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sessions-panel { border-right: 1px solid var(--border); }
+
+    .panel-title {
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .panel-body {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* ── Sessions table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--bg-alt);
+    }
+
+    th {
+      padding: 5px 10px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: normal;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 5px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 160px;
+      vertical-align: middle;
+    }
+
+    td.td-action { max-width: none; width: 1%; }
+
+    tr.session-row {
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    tr.session-row:hover    { background: var(--bg-alt); }
+    tr.session-row.expanded { background: var(--sel-bg); }
+
+    tr.detail-row > td {
+      background: var(--sel-bg);
+      padding: 8px 12px 10px;
+      color: var(--dim);
+      font-size: 12px;
+      cursor: default;
+      max-width: none;
+      white-space: normal;
+    }
+
+    /* ── Status dots ── */
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-working  { background: var(--green);  box-shadow: 0 0 4px var(--green); }
+    .dot-waiting  { background: var(--amber); }
+    .dot-starting { background: var(--cyan); }
+    .dot-ended    { background: var(--red); }
+    .dot-idle     { background: var(--muted); }
+
+    /* ── Context bar ── */
+    .ctx-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .ctx-track {
+      width: 44px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .ctx-fill {
+      height: 100%;
+      border-radius: 2px;
+    }
+    .ctx-label {
+      font-size: 11px;
+      color: var(--dim);
+      min-width: 30px;
+    }
+
+    /* ── Handoff button ── */
+    .btn-handoff {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-handoff:hover   { border-color: var(--green); color: var(--green); }
+    .btn-handoff.saving  { border-color: var(--amber); color: var(--amber); }
+    .btn-handoff.saved   { border-color: var(--green); color: var(--green); }
+    .btn-handoff.errored { border-color: var(--red);   color: var(--red); }
+
+    /* ── Handoffs panel ── */
+    .handoff-item {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .handoff-header {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .handoff-header:hover { background: var(--bg-alt); }
+
+    .handoff-id {
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: bold;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .handoff-meta {
+      color: var(--muted);
+      font-size: 10px;
+      margin-top: 1px;
+    }
+
+    .handoff-preview {
+      color: var(--dim);
+      font-size: 11px;
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .handoff-content {
+      display: none;
+      padding: 10px 12px;
+      background: var(--sel-bg);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--dim);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .handoff-content.visible { display: block; }
+
+    .handoff-content .md-h1 { color: var(--text); font-weight: bold; }
+    .handoff-content .md-h2 { color: var(--text); font-weight: bold; }
+    .handoff-content .md-bold { color: var(--text); }
+
+    /* ── Empty / loading states ── */
+    .empty {
+      padding: 28px 16px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      display: flex;
+      gap: 16px;
+      padding: 4px 14px;
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo">relay</span>
+    <span class="version" id="version">v—</span>
+    <div class="ws-status">
+      <span id="ws-label">connecting</span>
+      <div class="ws-dot reconnecting" id="ws-dot"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sessions panel -->
+    <section class="panel sessions-panel">
+      <div class="panel-title">Sessions</div>
+      <div class="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Project</th>
+              <th>Model</th>
+              <th>Branch</th>
+              <th>Turns</th>
+              <th>Context</th>
+              <th>Cost</th>
+              <th>Age</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="sessions-body">
+            <tr><td colspan="9" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Handoffs panel -->
+    <section class="panel handoffs-panel">
+      <div class="panel-title">Handoffs</div>
+      <div class="panel-body" id="handoffs-list">
+        <div class="empty">Loading…</div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <span id="footer-counts">—</span>
+    <span id="footer-updated">—</span>
+  </footer>
+
+  <script>
+    // ── State ──
+    let sessions = [];
+    let handoffs = [];
+    let ws = null;
+    let reconnectTimer = null;
+    const expandedSessions = new Set();
+    const expandedHandoffs = new Set();
+    const handoffCache = {};
+
+    // ── Formatters ──
+    function fmtAge(secs) {
+      if (secs < 60)   return secs + 's';
+      if (secs < 3600) return Math.floor(secs / 60) + 'm';
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      return h + 'h' + (m ? m + 'm' : '');
+    }
+
+    function fmtCost(usd) {
+      if (usd < 0.001) return '$0.00';
+      if (usd < 0.01)  return '<$0.01';
+      return '$' + usd.toFixed(2);
+    }
+
+    function fmtSize(bytes) {
+      if (bytes < 1024) return bytes + 'B';
+      return (bytes / 1024).toFixed(1) + 'KB';
+    }
+
+    function ctxColor(pct) {
+      if (pct >= 85) return '#d17f7f';
+      if (pct >= 65) return '#d4b36a';
+      return '#7fd17f';
+    }
+
+    function dotClass(state) {
+      return { working: 'dot-working', waiting: 'dot-waiting',
+               starting: 'dot-starting', ended: 'dot-ended', idle: 'dot-idle' }[state] || 'dot-idle';
+    }
+
+    function modelShort(m) {
+      return m.replace('claude-', '').replace(/-\d{8}$/, '').replace('-latest', '');
+    }
+
+    function branchShort(b) {
+      if (!b) return '—';
+      const last = b.split('/').pop();
+      return last.length > 20 ? last.slice(0, 18) + '…' : last;
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Basic markdown → safe HTML (escapes first, then adds spans)
+    function renderMd(md) {
+      return esc(md)
+        .replace(/^# (.+)$/gm,   '<span class="md-h1"># $1</span>')
+        .replace(/^## (.+)$/gm,  '<span class="md-h2">## $1</span>')
+        .replace(/^### (.+)$/gm, '<span class="md-h2">### $1</span>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="md-bold">$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    // ── Render sessions ──
+    function renderSessions() {
+      const tbody = document.getElementById('sessions-body');
+      if (!sessions.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty">No sessions found</td></tr>';
+        return;
+      }
+
+      let html = '';
+      for (const s of sessions) {
+        const isExpanded = expandedSessions.has(s.session_id);
+        const ctx = Math.round(s.context_pct);
+        const fill = Math.min(100, ctx);
+
+        html += `<tr class="session-row${isExpanded ? ' expanded' : ''}" data-id="${esc(s.session_id)}"
+          onclick="toggleSession('${esc(s.session_id)}')">
+          <td><span class="dot ${dotClass(s.state)}" title="${esc(s.state)}"></span></td>
+          <td title="${esc(s.project_name)}">${esc(s.project_name)}</td>
+          <td title="${esc(s.model)}">${esc(modelShort(s.model))}</td>
+          <td title="${esc(s.git_branch)}">${esc(branchShort(s.git_branch))}</td>
+          <td>${s.turn_count}</td>
+          <td>
+            <div class="ctx-bar">
+              <div class="ctx-track">
+                <div class="ctx-fill" style="width:${fill}%;background:${ctxColor(ctx)}"></div>
+              </div>
+              <span class="ctx-label">${ctx}%</span>
+            </div>
+          </td>
+          <td>${esc(fmtCost(s.cost_usd))}</td>
+          <td>${esc(fmtAge(s.age_secs))}</td>
+          <td class="td-action" onclick="event.stopPropagation()">
+            <button class="btn-handoff" onclick="saveHandoff(this,'${esc(s.session_id)}')">handoff</button>
+          </td>
+        </tr>`;
+
+        if (isExpanded) {
+          html += `<tr class="detail-row"><td colspan="9">
+            <div style="display:flex;gap:20px;flex-wrap:wrap">
+              <div><span style="color:var(--muted)">id&nbsp;</span><span style="color:var(--cyan)">${esc(s.session_id)}</span></div>
+              <div><span style="color:var(--muted)">files&nbsp;</span><span style="color:var(--text)">${s.files_touched}</span></div>
+              <div><span style="color:var(--muted)">model&nbsp;</span><span style="color:var(--violet)">${esc(s.model)}</span></div>
+              <div><span style="color:var(--muted)">branch&nbsp;</span><span style="color:var(--amber)">${esc(s.git_branch || '—')}</span></div>
+            </div>
+          </td></tr>`;
+        }
+      }
+      tbody.innerHTML = html;
+    }
+
+    function toggleSession(id) {
+      if (expandedSessions.has(id)) expandedSessions.delete(id);
+      else expandedSessions.add(id);
+      renderSessions();
+    }
+
+    // ── Save handoff ──
+    async function saveHandoff(btn, id) {
+      btn.className = 'btn-handoff saving';
+      btn.textContent = '…';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/sessions/' + encodeURIComponent(id) + '/handoff', { method: 'POST' });
+        if (res.ok) {
+          btn.className = 'btn-handoff saved';
+          btn.textContent = 'saved';
+          setTimeout(() => { btn.className = 'btn-handoff'; btn.textContent = 'handoff'; btn.disabled = false; }, 2500);
+        } else {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          btn.className = 'btn-handoff errored';
+          btn.textContent = 'error';
+          btn.title = body.error || 'failed';
+          setTimeout(() => { btn.className = 'btn-handoff'; btn.textContent = 'handoff'; btn.disabled = false; btn.title = ''; }, 3000);
+        }
+      } catch (_) {
+        btn.className = 'btn-handoff errored';
+        btn.textContent = 'error';
+        setTimeout(() => { btn.className = 'btn-handoff'; btn.textContent = 'handoff'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    // ── Render handoffs ──
+    function renderHandoffs() {
+      const list = document.getElementById('handoffs-list');
+      if (!handoffs.length) {
+        list.innerHTML = '<div class="empty">No handoffs saved</div>';
+        return;
+      }
+
+      let html = '';
+      for (const h of handoffs) {
+        const isExpanded = expandedHandoffs.has(h.id);
+        const cached = handoffCache[h.id];
+        const date = h.created_at ? h.created_at.slice(0, 10) : '';
+
+        html += `<div class="handoff-item">
+          <div class="handoff-header" onclick="toggleHandoff('${esc(h.id)}')">
+            <div class="handoff-id">${esc(h.id)}</div>
+            <div class="handoff-meta">${esc(fmtSize(h.size_bytes))}${date ? ' · ' + esc(date) : ''}</div>
+            ${h.preview ? `<div class="handoff-preview">${esc(h.preview)}</div>` : ''}
+          </div>
+          <div class="handoff-content${isExpanded ? ' visible' : ''}" id="hc-${esc(h.id)}">
+            ${isExpanded ? (cached ? renderMd(cached) : '<span style="color:var(--muted)">Loading…</span>') : ''}
+          </div>
+        </div>`;
+      }
+      list.innerHTML = html;
+    }
+
+    async function toggleHandoff(id) {
+      if (expandedHandoffs.has(id)) {
+        expandedHandoffs.delete(id);
+        renderHandoffs();
+        return;
+      }
+      expandedHandoffs.add(id);
+      renderHandoffs();
+      if (!handoffCache[id]) {
+        try {
+          const res = await fetch('/api/handoffs/' + encodeURIComponent(id));
+          if (res.ok) {
+            handoffCache[id] = await res.text();
+            const el = document.getElementById('hc-' + id);
+            if (el) el.innerHTML = renderMd(handoffCache[id]);
+          } else {
+            const el = document.getElementById('hc-' + id);
+            if (el) el.innerHTML = '<span style="color:var(--red)">Failed to load</span>';
+          }
+        } catch (_) {
+          const el = document.getElementById('hc-' + id);
+          if (el) el.innerHTML = '<span style="color:var(--red)">Network error</span>';
+        }
+      }
+    }
+
+    // ── WebSocket ──
+    function setWsStatus(status) {
+      document.getElementById('ws-dot').className = 'ws-dot ' + status;
+      document.getElementById('ws-label').textContent =
+        status === 'connected' ? 'live' :
+        status === 'reconnecting' ? 'reconnecting' : 'offline';
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(proto + '//' + location.host + '/api/ws');
+
+      ws.onopen = () => {
+        setWsStatus('connected');
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      };
+
+      ws.onclose = () => {
+        setWsStatus('reconnecting');
+        if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connectWs(); }, 3000);
+      };
+
+      ws.onerror = () => setWsStatus('disconnected');
+
+      ws.onmessage = async (evt) => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+
+        switch (msg.type) {
+          case 'snapshot':
+            sessions = msg.sessions || [];
+            handoffs = msg.handoffs || [];
+            renderSessions();
+            renderHandoffs();
+            updateFooter();
+            break;
+          case 'sessions_updated':
+            sessions = msg.sessions || [];
+            renderSessions();
+            updateFooter();
+            break;
+          case 'handoff_created':
+            await fetchHandoffs();
+            break;
+          case 'resync':
+            sessions = msg.sessions || [];
+            handoffs = msg.handoffs || [];
+            renderSessions();
+            renderHandoffs();
+            updateFooter();
+            break;
+        }
+      };
+    }
+
+    // ── HTTP fetches ──
+    async function fetchSessions() {
+      const res = await fetch('/api/sessions');
+      sessions = await res.json();
+      renderSessions();
+      updateFooter();
+    }
+
+    async function fetchHandoffs() {
+      const res = await fetch('/api/handoffs');
+      handoffs = await res.json();
+      renderHandoffs();
+    }
+
+    async function fetchVersion() {
+      try {
+        const data = await fetch('/api/health').then(r => r.json());
+        document.getElementById('version').textContent = 'v' + data.version;
+      } catch (_) {}
+    }
+
+    function updateFooter() {
+      const s = sessions.length;
+      const h = handoffs.length;
+      document.getElementById('footer-counts').textContent =
+        s + ' session' + (s !== 1 ? 's' : '') + ' · ' + h + ' handoff' + (h !== 1 ? 's' : '');
+      document.getElementById('footer-updated').textContent =
+        'updated ' + new Date().toLocaleTimeString();
+    }
+
+    // ── Init ──
+    (async () => {
+      await fetchVersion();
+      await Promise.all([fetchSessions(), fetchHandoffs()]);
+      connectWs();
+    })();
+  </script>
+</body>
+</html>

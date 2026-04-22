@@ -1,3 +1,4 @@
+mod api;
 mod config;
 mod git;
 mod handoff;
@@ -51,6 +52,24 @@ enum Commands {
     TestNotify,
     /// Remove all traces of relay (config, hooks, shell wrapper, binary)
     Uninstall,
+    /// Start the web API server
+    Serve {
+        /// Port to listen on
+        #[arg(long, default_value_t = 4747)]
+        port: u16,
+        /// Address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        bind: String,
+        /// Bearer token for API authentication (overrides config file)
+        #[arg(long)]
+        token: Option<String>,
+    },
+    /// Print instructions for exposing the relay API via a tunnel
+    Tunnel {
+        /// Port the relay server is listening on
+        #[arg(long, default_value_t = 4747)]
+        port: u16,
+    },
     /// Orchestrate multiple Claude sessions from a plan file
     Orchestrate {
         /// Path to the plan TOML file
@@ -136,6 +155,47 @@ fn main() -> Result<()> {
         }
         Commands::Uninstall => {
             config::uninstall()?;
+        }
+        Commands::Serve { port, bind, token } => {
+            let mut cfg = config::load()?;
+            if let Some(t) = token {
+                cfg.api_token = Some(t);
+            }
+            let addr = format!("{bind}:{port}");
+            if cfg.api_token.is_some() {
+                println!("relay API listening on http://{addr} (auth: token required)");
+            } else {
+                eprintln!("⚠ No API token set — API is unauthenticated. Use --token or set api_token in config.");
+                println!("relay API listening on http://{addr}");
+            }
+            tokio::runtime::Runtime::new()?.block_on(api::serve(cfg, addr))?;
+        }
+        Commands::Tunnel { port } => {
+            let cloudflared_found = std::process::Command::new("cloudflared")
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+
+            if cloudflared_found {
+                println!("Run this command to expose your relay API:");
+                println!();
+                println!("  cloudflared tunnel --url http://127.0.0.1:{port}");
+                println!();
+                println!("cloudflared will print a public https://... URL you can share.");
+            } else {
+                println!("cloudflared not found. Install it to create a secure tunnel:");
+                println!();
+                println!("  macOS:  brew install cloudflared");
+                println!("  Linux:  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \\");
+                println!("            -o cloudflared && chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/");
+                println!();
+                println!("Then run:");
+                println!("  cloudflared tunnel --url http://127.0.0.1:{port}");
+                println!();
+                println!("Alternative: Tailscale (https://tailscale.com) lets you access relay");
+                println!("  from any device on your Tailnet without opening ports.");
+            }
         }
         Commands::Orchestrate {
             plan,
