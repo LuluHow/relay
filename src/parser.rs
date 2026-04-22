@@ -94,6 +94,33 @@ pub struct ToolUse {
     pub timestamp: Option<String>,
 }
 
+/// Create an empty ParsedSession for a starting session (no JSONL data yet).
+pub fn empty_parsed(session: &SessionInfo) -> ParsedSession {
+    ParsedSession {
+        session_id: session.session_id.clone(),
+        project_name: session.project_name.clone(),
+        model: String::new(),
+        git_branch: String::new(),
+        cwd: String::new(),
+        version: String::new(),
+        user_messages: Vec::new(),
+        assistant_messages: Vec::new(),
+        tool_uses: Vec::new(),
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+        total_cache_read: 0,
+        total_cache_create: 0,
+        current_context_tokens: 0,
+        context_history: Vec::new(),
+        compaction_count: 0,
+        turn_count: 0,
+        first_timestamp: None,
+        last_timestamp: None,
+        age_secs: 0,
+        files_touched: Vec::new(),
+    }
+}
+
 /// Parse an entire session JSONL file
 pub fn parse_session(session: &SessionInfo) -> Result<ParsedSession> {
     let file = std::fs::File::open(&session.jsonl_path)

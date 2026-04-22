@@ -134,14 +134,22 @@ impl App {
             self.config = new_config;
         }
 
+        // Discover running Claude processes (single lsof call)
+        let claude_pids = session::discover_claude_pids();
+
         if let Ok(sessions) = session::discover_sessions() {
             self.sessions = sessions
                 .into_iter()
                 .filter_map(|s| parser::parse_session(&s).ok().map(|p| (s, p)))
                 .collect();
 
-            // Discover running Claude processes (single lsof call)
-            let claude_pids = session::discover_claude_pids();
+            // Detect processes with no JSONL yet (starting sessions)
+            let existing_infos: Vec<_> =
+                self.sessions.iter().map(|(info, _)| info.clone()).collect();
+            for starting in session::discover_starting_sessions(&existing_infos, &claude_pids) {
+                let empty_parsed = parser::empty_parsed(&starting);
+                self.sessions.push((starting, empty_parsed));
+            }
 
             // Resurrect sessions that show new activity
             self.dead_sessions.retain(|sid| {
@@ -150,9 +158,10 @@ impl App {
                     .any(|(info, parsed)| info.session_id == *sid && parsed.age_secs >= 5)
             });
 
-            // Check process liveness for recent sessions
+            // Check process liveness for recent sessions (skip starting sessions)
             for (info, parsed) in &self.sessions {
-                if parsed.age_secs < 300
+                if !info.session_id.starts_with("starting-")
+                    && parsed.age_secs < 300
                     && !self.dead_sessions.contains(&info.session_id)
                     && !session::is_session_alive(&info.jsonl_path, &claude_pids)
                 {
@@ -162,6 +171,9 @@ impl App {
 
             let dead = &self.dead_sessions;
             self.sessions.sort_by_key(|(info, p)| {
+                if info.session_id.starts_with("starting-") {
+                    return session::SessionState::Starting.sort_key();
+                }
                 let process_dead = dead.contains(&info.session_id);
                 session::classify_state(p.age_secs, process_dead).sort_key()
             });
@@ -275,6 +287,9 @@ impl App {
     }
 
     fn session_state(&self, info: &SessionInfo, parsed: &ParsedSession) -> session::SessionState {
+        if info.session_id.starts_with("starting-") {
+            return session::SessionState::Starting;
+        }
         let process_dead = self.dead_sessions.contains(&info.session_id);
         session::classify_state(parsed.age_secs, process_dead)
     }
@@ -1326,10 +1341,15 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|(info, parsed)| {
             let status = statuses.get(&info.session_id);
 
-            let process_dead = dead_sessions.contains(&info.session_id);
-            let state = session::classify_state(parsed.age_secs, process_dead);
+            let state = if info.session_id.starts_with("starting-") {
+                session::SessionState::Starting
+            } else {
+                let process_dead = dead_sessions.contains(&info.session_id);
+                session::classify_state(parsed.age_secs, process_dead)
+            };
 
             let (dot, dot_color) = match state {
+                session::SessionState::Starting => ("◌", CYAN),
                 session::SessionState::Working => ("●", GREEN),
                 session::SessionState::Waiting => ("◐", YELLOW),
                 session::SessionState::Ended => ("✕", RED),
