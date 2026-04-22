@@ -161,9 +161,7 @@ pub fn ensure_hooks() -> bool {
     });
 
     if let Some(obj) = settings.as_object_mut() {
-        let hooks = obj
-            .entry("hooks")
-            .or_insert_with(|| serde_json::json!({}));
+        let hooks = obj.entry("hooks").or_insert_with(|| serde_json::json!({}));
         if let Some(hooks_obj) = hooks.as_object_mut() {
             let stop_arr = hooks_obj
                 .entry("Stop")
@@ -198,7 +196,11 @@ pub fn read_stop_events() -> Vec<StopEvent> {
     let mut events = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         if !name.ends_with("_stop.json") {
             continue;
         }

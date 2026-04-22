@@ -145,7 +145,6 @@ pub struct SessionStatus {
     pub exceeds_200k: bool,
 }
 
-
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /// Install the statusLine hook. If another hook is already configured (e.g. abtop),
@@ -233,7 +232,11 @@ fn read_chain_cmd(script_path: &std::path::Path) -> Option<String> {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("printf '%s' \"$INPUT\" | ") && !trimmed.contains("python3") {
-            return Some(trimmed.strip_prefix("printf '%s' \"$INPUT\" | ")?.to_string());
+            return Some(
+                trimmed
+                    .strip_prefix("printf '%s' \"$INPUT\" | ")?
+                    .to_string(),
+            );
         }
     }
     None
@@ -251,7 +254,7 @@ pub fn read_all() -> HashMap<String, SessionStatus> {
     let mut map = HashMap::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().map_or(true, |e| e != "json") {
+        if path.extension().is_none_or(|e| e != "json") {
             continue;
         }
         if let Ok(content) = std::fs::read_to_string(&path) {
@@ -268,7 +271,9 @@ pub fn read_all() -> HashMap<String, SessionStatus> {
 /// Clean up stale session files (older than 24h)
 pub fn cleanup_stale() {
     let Some(dir) = sessions_dir() else { return };
-    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
     let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 3600);
 
     for entry in entries.flatten() {

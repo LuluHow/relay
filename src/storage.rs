@@ -34,11 +34,7 @@ pub fn list() -> Result<()> {
     let dir = handoffs_dir()?;
     let mut entries: Vec<_> = std::fs::read_dir(&dir)?
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .map_or(false, |ext| ext == "md")
-        })
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
         .collect();
 
     if entries.is_empty() {
@@ -75,10 +71,7 @@ pub fn list() -> Result<()> {
     }
 
     println!();
-    println!(
-        "  {} relay restore <id>",
-        "Restore:".dimmed()
-    );
+    println!("  {} relay restore <id>", "Restore:".dimmed());
 
     Ok(())
 }
@@ -105,7 +98,10 @@ pub fn restore(id: &str) -> Result<()> {
             "Multiple handoffs match '{id}'. Be more specific:\n{}",
             matching
                 .iter()
-                .map(|e| format!("  - {}", e.file_name().to_string_lossy().trim_end_matches(".md")))
+                .map(|e| format!(
+                    "  - {}",
+                    e.file_name().to_string_lossy().trim_end_matches(".md")
+                ))
                 .collect::<Vec<_>>()
                 .join("\n")
         );

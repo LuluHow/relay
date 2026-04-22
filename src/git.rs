@@ -93,7 +93,10 @@ pub fn generate_commit_message(
 
     // Title line: prefix(reason): summary of what changed
     let title = if changed_files.is_empty() {
-        format!("{prefix}({reason}): auto-commit [{} turns, {pct}%]", parsed.turn_count)
+        format!(
+            "{prefix}({reason}): auto-commit [{} turns, {pct}%]",
+            parsed.turn_count
+        )
     } else {
         let summary = summarize_changes(&changed_files);
         format!("{prefix}({reason}): {summary}")
@@ -113,10 +116,7 @@ pub fn generate_commit_message(
         }
     }
 
-    body.push_str(&format!(
-        "\n[{} turns, {pct}% context]",
-        parsed.turn_count,
-    ));
+    body.push_str(&format!("\n[{} turns, {pct}% context]", parsed.turn_count,));
 
     format!("{title}{body}")
 }

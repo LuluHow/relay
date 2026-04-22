@@ -130,10 +130,11 @@ impl App {
 
             // Check process liveness for recent sessions
             for (info, parsed) in &self.sessions {
-                if parsed.age_secs < 300 && !self.dead_sessions.contains(&info.session_id) {
-                    if !session::is_session_alive(&info.jsonl_path, &claude_pids) {
-                        self.dead_sessions.insert(info.session_id.clone());
-                    }
+                if parsed.age_secs < 300
+                    && !self.dead_sessions.contains(&info.session_id)
+                    && !session::is_session_alive(&info.jsonl_path, &claude_pids)
+                {
+                    self.dead_sessions.insert(info.session_id.clone());
                 }
             }
 
@@ -147,7 +148,7 @@ impl App {
         self.statuses = statusline::read_all();
 
         let vis_count = self.visible_count();
-        if self.table_state.selected().map_or(true, |i| i >= vis_count) {
+        if self.table_state.selected().is_none_or(|i| i >= vis_count) {
             self.table_state
                 .select(if vis_count > 0 { Some(0) } else { None });
         }
@@ -367,10 +368,7 @@ impl App {
             "Context from a previous session (auto-handoff by relay, {}). Resume where we left off:\n\n---\n\n{}",
             reason, hoff
         );
-        let next_prompt_path = dirs::home_dir()
-            .unwrap()
-            .join(".relay")
-            .join("next_prompt");
+        let next_prompt_path = dirs::home_dir().unwrap().join(".relay").join("next_prompt");
         if let Err(e) = std::fs::write(&next_prompt_path, &prompt) {
             self.status_msg = Some((format!("write next_prompt: {e}"), Instant::now()));
             return;
@@ -405,7 +403,9 @@ impl App {
 
         // Schedule fallback restart: if the wrapper doesn't consume next_prompt
         // within cooldown+10s, relay spawns claude directly in a new terminal
-        let cwd = self.statuses.get(&info.session_id)
+        let cwd = self
+            .statuses
+            .get(&info.session_id)
             .map(|s| s.cwd.as_str())
             .filter(|c| !c.is_empty())
             .unwrap_or(&parsed.cwd)
@@ -433,9 +433,10 @@ impl App {
         let events = hooks::read_stop_events();
         for event in events {
             // Find the matching session
-            let session_data = self.sessions.iter().find(|(info, _)| {
-                info.session_id == event.session_id
-            });
+            let session_data = self
+                .sessions
+                .iter()
+                .find(|(info, _)| info.session_id == event.session_id);
 
             if let Some((_, parsed)) = session_data {
                 let status = self.statuses.get(&event.session_id).cloned();
@@ -466,10 +467,7 @@ impl App {
         };
         self.pending_restart = None;
 
-        let next_prompt = dirs::home_dir()
-            .unwrap()
-            .join(".relay")
-            .join("next_prompt");
+        let next_prompt = dirs::home_dir().unwrap().join(".relay").join("next_prompt");
 
         if !next_prompt.exists() {
             // Wrapper consumed it — restart handled
@@ -482,7 +480,8 @@ impl App {
             self.status_msg = Some(("spawned claude in new terminal".to_string(), Instant::now()));
         } else {
             self.status_msg = Some((
-                "restart failed — source ~/.relay/claude-wrapper.sh or run relay restore".to_string(),
+                "restart failed — source ~/.relay/claude-wrapper.sh or run relay restore"
+                    .to_string(),
                 Instant::now(),
             ));
         }
@@ -510,8 +509,7 @@ impl App {
 
         match git::auto_commit(cwd, &message) {
             Ok(hash) => {
-                self.status_msg =
-                    Some((format!("git: committed {hash}"), Instant::now()));
+                self.status_msg = Some((format!("git: committed {hash}"), Instant::now()));
             }
             Err(e) => {
                 self.status_msg = Some((format!("git: {e}"), Instant::now()));
@@ -624,7 +622,7 @@ fn load_handoffs() -> Vec<HandoffEntry> {
         .into_iter()
         .flatten()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
         .collect();
 
     entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
@@ -678,10 +676,7 @@ pub fn run() -> Result<()> {
     result
 }
 
-fn run_loop(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    app: &mut App,
-) -> Result<()> {
+fn run_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
         terminal.draw(|f| ui(f, app))?;
 
@@ -748,7 +743,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // header
-            Constraint::Min(5),   // content
+            Constraint::Min(5),    // content
             Constraint::Length(1), // footer
         ])
         .split(f.area());
@@ -764,15 +759,22 @@ fn ui(f: &mut Frame, app: &mut App) {
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
-    let active = app.sessions.iter().filter(|(info, p)| {
-        app.session_state(info, p).is_active()
-    }).count();
+    let active = app
+        .sessions
+        .iter()
+        .filter(|(info, p)| app.session_state(info, p).is_active())
+        .count();
     let idle = app.sessions.len() - active;
-    let agg_cost: f64 = app.sessions.iter().map(|(info, p)| {
-        app.statuses.get(&info.session_id)
-            .map(|s| s.cost_usd)
-            .unwrap_or_else(|| estimate_cost(p))
-    }).sum();
+    let agg_cost: f64 = app
+        .sessions
+        .iter()
+        .map(|(info, p)| {
+            app.statuses
+                .get(&info.session_id)
+                .map(|s| s.cost_usd)
+                .unwrap_or_else(|| estimate_cost(p))
+        })
+        .sum();
 
     let idle_label = if app.hide_idle {
         format!("{idle} hidden")
@@ -857,8 +859,7 @@ fn render_dashboard(
     let vis_count = app.visible_count() as u16;
     let table_h = (vis_count + 3).clamp(4, 8);
 
-    let has_messages =
-        !parsed.user_messages.is_empty() || !parsed.assistant_messages.is_empty();
+    let has_messages = !parsed.user_messages.is_empty() || !parsed.assistant_messages.is_empty();
     let msg_h: u16 = if has_messages && area.height >= 30 {
         5
     } else {
@@ -901,7 +902,12 @@ fn render_dashboard(
 
 // ── Top panels ──────────────────────────────────────────────────────────────
 
-fn render_context_panel(f: &mut Frame, parsed: &ParsedSession, status: Option<&SessionStatus>, area: Rect) {
+fn render_context_panel(
+    f: &mut Frame,
+    parsed: &ParsedSession,
+    status: Option<&SessionStatus>,
+    area: Rect,
+) {
     // Prefer live data from statusLine hook
     let (pct, window) = if let Some(s) = status {
         let p = s.context_used_pct.unwrap_or(0.0) as u8;
@@ -961,7 +967,8 @@ fn render_context_panel(f: &mut Frame, parsed: &ParsedSession, status: Option<&S
     ]));
 
     // Token counts
-    let current_ctx = status.map(|s| s.current_input + s.cache_read + s.cache_create)
+    let current_ctx = status
+        .map(|s| s.current_input + s.cache_read + s.cache_create)
         .filter(|&t| t > 0)
         .unwrap_or(parsed.current_context_tokens);
     lines.push(Line::from(Span::styled(
@@ -1180,7 +1187,7 @@ fn render_tokens_bar(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
         + parsed.total_cache_create;
 
     let half = inner.width as usize / 2;
-    let bar_w = half.saturating_sub(20).max(3).min(12);
+    let bar_w = half.saturating_sub(20).clamp(3, 12);
 
     let line1 = dual_bar(
         "Input",
@@ -1254,7 +1261,11 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
                 .map(|p| p as u8)
                 .unwrap_or_else(|| {
                     let w = context_window(&parsed.model, parsed.current_context_tokens);
-                    if w > 0 { (parsed.current_context_tokens as f64 / w as f64 * 100.0) as u8 } else { 0 }
+                    if w > 0 {
+                        (parsed.current_context_tokens as f64 / w as f64 * 100.0) as u8
+                    } else {
+                        0
+                    }
                 });
 
             let ctx_color = if pct >= 90 {
@@ -1273,12 +1284,19 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
                 .filter(|s| !s.model_name.is_empty())
                 .map(|s| s.model_name.clone())
                 .unwrap_or_else(|| {
-                    parsed.model.replace("claude-", "")
-                        .split('[').next().unwrap_or("").to_string()
+                    parsed
+                        .model
+                        .replace("claude-", "")
+                        .split('[')
+                        .next()
+                        .unwrap_or("")
+                        .to_string()
                 });
 
             // Cost — prefer live
-            let cost = status.map(|s| s.cost_usd).unwrap_or_else(|| estimate_cost(parsed));
+            let cost = status
+                .map(|s| s.cost_usd)
+                .unwrap_or_else(|| estimate_cost(parsed));
             let cost_color = if cost > 1.0 { YELLOW } else { DIM };
 
             // Lines changed
@@ -1292,8 +1310,11 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
             Row::new(vec![
                 Cell::from(dot).style(Style::default().fg(dot_color)),
                 Cell::from(info.project_name.clone()).style(Style::default().fg(text_color)),
-                Cell::from(model_short)
-                    .style(Style::default().fg(if is_idle { DIMMER } else { DIM })),
+                Cell::from(model_short).style(Style::default().fg(if is_idle {
+                    DIMMER
+                } else {
+                    DIM
+                })),
                 Cell::from(ctx_display).style(Style::default().fg(ctx_color)),
                 Cell::from(format!("${:.2}", cost)).style(Style::default().fg(cost_color)),
                 Cell::from(lines_display).style(Style::default().fg(text_color)),
@@ -1327,11 +1348,7 @@ fn render_sessions_table(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::default().fg(WHITE),
             )),
     )
-    .highlight_style(
-        Style::default()
-            .bg(BG_SELECT)
-            .add_modifier(Modifier::BOLD),
-    )
+    .highlight_style(Style::default().bg(BG_SELECT).add_modifier(Modifier::BOLD))
     .highlight_symbol("▸ ");
 
     f.render_stateful_widget(table, area, &mut app.table_state);
@@ -1404,11 +1421,7 @@ fn render_files_activity(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
     for tool in parsed.tool_uses.iter().rev().take(max_tools) {
         let max_summary = (activity_inner.width as usize).saturating_sub(12);
         let summary: String = tool.input_summary.chars().take(max_summary).collect();
-        let short = summary
-            .rsplit('/')
-            .next()
-            .unwrap_or(&summary)
-            .to_string();
+        let short = summary.rsplit('/').next().unwrap_or(&summary).to_string();
         tool_lines.push(Line::from(vec![
             Span::raw("  "),
             Span::styled(format!("{:<6}", tool.name), Style::default().fg(CYAN)),
@@ -1488,16 +1501,15 @@ fn render_last_messages(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
 
 fn render_handoffs(f: &mut Frame, app: &mut App, area: Rect) {
     if app.handoffs.is_empty() {
-        let empty = Paragraph::new(
-            "  No handoffs saved yet. Press 's' in Sessions tab to create one.",
-        )
-        .style(Style::default().fg(DIM))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(BORDER))
-                .title(" handoffs "),
-        );
+        let empty =
+            Paragraph::new("  No handoffs saved yet. Press 's' in Sessions tab to create one.")
+                .style(Style::default().fg(DIM))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(BORDER))
+                        .title(" handoffs "),
+                );
         f.render_widget(empty, area);
         return;
     }
@@ -1532,11 +1544,7 @@ fn render_handoffs(f: &mut Frame, app: &mut App, area: Rect) {
                 .border_style(Style::default().fg(BORDER))
                 .title(format!(" {} handoffs ", app.handoffs.len())),
         )
-        .highlight_style(
-            Style::default()
-                .bg(BG_SELECT)
-                .add_modifier(Modifier::BOLD),
-        )
+        .highlight_style(Style::default().bg(BG_SELECT).add_modifier(Modifier::BOLD))
         .highlight_symbol(" ▸");
 
     f.render_stateful_widget(list, chunks[0], &mut app.handoff_state);
@@ -1586,10 +1594,7 @@ fn keybindings_text() -> String {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 fn word_wrap(text: &str, width: usize, max_lines: usize) -> Vec<String> {
-    let clean: String = text
-        .replace("**", "")
-        .replace('\n', " ")
-        .replace("  ", " ");
+    let clean: String = text.replace("**", "").replace('\n', " ").replace("  ", " ");
     let mut lines = Vec::new();
     let mut cur = String::new();
 
@@ -1640,7 +1645,13 @@ fn mini_sparkline(data: &[u64], width: usize) -> String {
         .collect()
 }
 
-fn bar_spans(label: &str, value: u64, total: u64, bar_w: usize, color: Color) -> Vec<Span<'static>> {
+fn bar_spans(
+    label: &str,
+    value: u64,
+    total: u64,
+    bar_w: usize,
+    color: Color,
+) -> Vec<Span<'static>> {
     let filled = if total > 0 {
         ((value as f64 / total as f64) * bar_w as f64) as usize
     } else {
@@ -1664,6 +1675,7 @@ fn bar_spans(label: &str, value: u64, total: u64, bar_w: usize, color: Color) ->
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dual_bar(
     l1: &str,
     v1: u64,
@@ -1693,7 +1705,6 @@ fn context_window(model: &str, observed: u64) -> u64 {
         200_000
     }
 }
-
 
 fn estimate_cost(parsed: &ParsedSession) -> f64 {
     let m = parsed.model.to_lowercase();

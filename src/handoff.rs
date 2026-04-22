@@ -19,7 +19,10 @@ fn first_real_user_message(messages: &[ConversationTurn]) -> Option<&Conversatio
 
 /// Get the last real user message (skip relay handoff injections)
 fn last_real_user_message(messages: &[ConversationTurn]) -> Option<&ConversationTurn> {
-    messages.iter().rev().find(|m| !is_relay_handoff(&m.content))
+    messages
+        .iter()
+        .rev()
+        .find(|m| !is_relay_handoff(&m.content))
 }
 
 /// Generate a structured handoff markdown from a parsed session
@@ -34,9 +37,7 @@ pub fn generate(session: &ParsedSession) -> Result<String> {
     let last_real = last_real_user_message(&session.user_messages);
     let first_real = first_real_user_message(&session.user_messages);
     let current_focus = match (last_real, first_real) {
-        (Some(last), Some(first)) if !std::ptr::eq(last, first) => {
-            truncate(&last.content, 300)
-        }
+        (Some(last), Some(first)) if !std::ptr::eq(last, first) => truncate(&last.content, 300),
         _ => String::new(),
     };
 
@@ -153,4 +154,3 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", &cleaned[..end])
     }
 }
-

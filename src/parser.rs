@@ -82,6 +82,7 @@ pub struct ParsedSession {
 #[derive(Debug, Clone)]
 pub struct ConversationTurn {
     pub content: String,
+    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 
@@ -89,6 +90,7 @@ pub struct ConversationTurn {
 pub struct ToolUse {
     pub name: String,
     pub input_summary: String,
+    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 
@@ -224,7 +226,12 @@ pub fn parse_session(session: &SessionInfo) -> Result<ParsedSession> {
                     }
 
                     // Tool uses
-                    extract_tool_uses(&msg.content, &raw.timestamp, &mut parsed.tool_uses, &mut seen_files);
+                    extract_tool_uses(
+                        &msg.content,
+                        &raw.timestamp,
+                        &mut parsed.tool_uses,
+                        &mut seen_files,
+                    );
                 }
             }
             _ => {}

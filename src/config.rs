@@ -108,10 +108,9 @@ pub fn load() -> Result<Config> {
     if !p.exists() {
         return Ok(Config::default());
     }
-    let content = std::fs::read_to_string(&p)
-        .context(format!("Cannot read {}", p.display()))?;
-    let config: Config = toml::from_str(&content)
-        .context(format!("Invalid config in {}", p.display()))?;
+    let content = std::fs::read_to_string(&p).context(format!("Cannot read {}", p.display()))?;
+    let config: Config =
+        toml::from_str(&content).context(format!("Invalid config in {}", p.display()))?;
     Ok(config)
 }
 

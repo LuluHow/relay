@@ -160,6 +160,7 @@ fn project_dir_name(jsonl_path: &Path) -> Option<String> {
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
     pub session_id: String,
+    #[allow(dead_code)]
     pub project_path: String,
     pub project_name: String,
     pub jsonl_path: PathBuf,
@@ -174,7 +175,10 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
         .join("projects");
 
     if !claude_dir.exists() {
-        bail!("No Claude Code projects directory found at {}", claude_dir.display());
+        bail!(
+            "No Claude Code projects directory found at {}",
+            claude_dir.display()
+        );
     }
 
     let mut sessions = Vec::new();
@@ -198,7 +202,7 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
         for file_entry in std::fs::read_dir(&project_dir)? {
             let file_entry = file_entry?;
             let path = file_entry.path();
-            if path.extension().map_or(true, |e| e != "jsonl") {
+            if path.extension().is_none_or(|e| e != "jsonl") {
                 continue;
             }
             // Skip subagent directories
@@ -272,9 +276,11 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
 
     println!(
         "{}",
-        format!(" {:^8} {:^14} {:^10} {:^7} {:^6} {:>7}  {}",
+        format!(
+            " {:^8} {:^14} {:^10} {:^7} {:^6} {:>7}  {}",
             "STATUS", "PROJECT", "MODEL", "CONTEXT", "TURNS", "AGE", "SESSION"
-        ).bold()
+        )
+        .bold()
     );
 
     for s in &sessions[..limit] {
@@ -314,9 +320,7 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
             context_display.normal()
         };
 
-        let model_short = parsed.model
-            .replace("claude-", "")
-            .replace("-20", "");
+        let model_short = parsed.model.replace("claude-", "").replace("-20", "");
 
         println!(
             " {:>8} {:>14} {:>10} {:>7} {:>6} {:>7}  {}",

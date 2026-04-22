@@ -8,11 +8,15 @@ mod statusline;
 mod storage;
 mod tui;
 
-use clap::{Parser, Subcommand};
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "relay", version, about = "Monitor Claude Code sessions and generate handoffs")]
+#[command(
+    name = "relay",
+    version,
+    about = "Monitor Claude Code sessions and generate handoffs"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
