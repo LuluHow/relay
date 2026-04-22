@@ -37,6 +37,7 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
         .route("/api/handoffs", get(routes::list_handoffs))
         .route("/api/handoffs/{id}", get(routes::get_handoff))
         .route("/api/config", get(routes::get_config))
+        .route("/api/ws", get(ws::handler))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
