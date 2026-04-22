@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 use anyhow::Result;
 
 #[derive(Parser)]
-#[command(name = "relay", about = "Monitor Claude Code sessions and generate handoffs")]
+#[command(name = "relay", version, about = "Monitor Claude Code sessions and generate handoffs")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -74,8 +74,26 @@ fn main() -> Result<()> {
             println!("Config ready: {}", path.display());
             println!("Shell wrapper: ~/.relay/claude-wrapper.sh");
             println!();
-            println!("Add this to your .zshrc:");
-            println!("  source ~/.relay/claude-wrapper.sh");
+
+            // Detect user's shell for correct instructions
+            let shell = std::env::var("SHELL").unwrap_or_default();
+            let rc_file = if shell.contains("zsh") {
+                ".zshrc"
+            } else if shell.contains("bash") {
+                ".bashrc"
+            } else if shell.contains("fish") {
+                ".config/fish/config.fish"
+            } else {
+                ".bashrc"
+            };
+
+            if shell.contains("fish") {
+                println!("Note: the shell wrapper requires bash or zsh.");
+                println!("If you use fish, add a bash/zsh alias or run claude from bash.");
+            } else {
+                println!("Add this to your ~/{rc_file}:");
+                println!("  source ~/.relay/claude-wrapper.sh");
+            }
             println!();
             println!("Then set auto_handoff = true in ~/.relay/config.toml");
         }

@@ -386,7 +386,7 @@ impl App {
 
         // Notify
         if self.config.notify {
-            #[cfg(target_os = "macos")]
+            #[cfg(feature = "notifications")]
             {
                 let body = if killed {
                     format!("{reason} — restarting")
@@ -396,7 +396,6 @@ impl App {
                 let _ = notify_rust::Notification::new()
                     .summary("relay — auto-handoff")
                     .body(&body)
-                    .sound_name("Ping")
                     .show();
             }
         }

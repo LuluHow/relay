@@ -58,10 +58,55 @@ pub fn classify_state(age_secs: u64, process_dead: bool) -> SessionState {
 
 use std::collections::HashMap;
 
-/// Discover running Claude processes via `lsof -c claude -a -d cwd`.
+/// Discover running Claude processes.
+/// Uses `lsof` on macOS, falls back to `/proc` on Linux.
 /// Returns a map of encoded project directory name → list of PIDs.
 /// The key matches the directory names under `~/.claude/projects/`.
 pub fn discover_claude_pids() -> HashMap<String, Vec<u32>> {
+    // Try /proc first (Linux), fall back to lsof (macOS/BSD)
+    if Path::new("/proc").exists() {
+        discover_claude_pids_proc()
+    } else {
+        discover_claude_pids_lsof()
+    }
+}
+
+/// Linux: scan /proc/*/cmdline for "claude" and read /proc/*/cwd symlink
+fn discover_claude_pids_proc() -> HashMap<String, Vec<u32>> {
+    let mut map: HashMap<String, Vec<u32>> = HashMap::new();
+
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return map;
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        let Ok(pid) = name_str.parse::<u32>() else {
+            continue;
+        };
+
+        // Check if this is a claude process
+        let cmdline_path = format!("/proc/{pid}/cmdline");
+        let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) else {
+            continue;
+        };
+        if !cmdline.contains("claude") {
+            continue;
+        }
+
+        // Read cwd symlink
+        let cwd_path = format!("/proc/{pid}/cwd");
+        if let Ok(cwd) = std::fs::read_link(&cwd_path) {
+            let encoded = cwd.to_string_lossy().replace('/', "-");
+            map.entry(encoded).or_default().push(pid);
+        }
+    }
+    map
+}
+
+/// macOS/BSD: use `lsof -c claude -a -d cwd -Fn`
+fn discover_claude_pids_lsof() -> HashMap<String, Vec<u32>> {
     let output = match Command::new("lsof")
         .args(["-c", "claude", "-a", "-d", "cwd", "-Fn"])
         .stdout(Stdio::piped())
