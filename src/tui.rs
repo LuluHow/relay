@@ -382,6 +382,12 @@ impl App {
             false
         };
 
+        // Terminal bell
+        if self.config.sound {
+            print!("\x07");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+        }
+
         // Notify
         if self.config.notify {
             #[cfg(feature = "notifications")]
@@ -509,6 +515,10 @@ impl App {
 
         match git::auto_commit(cwd, &message) {
             Ok(hash) => {
+                if self.config.sound {
+                    print!("\x07");
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
                 self.status_msg = Some((format!("git: committed {hash}"), Instant::now()));
             }
             Err(e) => {
