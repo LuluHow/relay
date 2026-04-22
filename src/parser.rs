@@ -194,10 +194,7 @@ pub fn parse_session(session: &SessionInfo) -> Result<ParsedSession> {
 
                     let content = extract_text_content(&msg.content);
                     // Track real user messages (skip tool results and empty content)
-                    if msg.role == "user"
-                        && !content.is_empty()
-                        && !content.starts_with('[')
-                    {
+                    if msg.role == "user" && !content.is_empty() && !content.starts_with('[') {
                         parsed.user_messages.push(ConversationTurn {
                             content,
                             timestamp: raw.timestamp.clone(),

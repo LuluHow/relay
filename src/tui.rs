@@ -26,21 +26,21 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 // ── Palette ─────────────────────────────────────────────────────────────────
 
 // Design: classic dark — #0a0a0a bg, green phosphor accents
-const GREEN: Color = Color::Rgb(127, 209, 127);     // --green: #7fd17f
-const GREEN_DIM: Color = Color::Rgb(74, 122, 74);   // --green-dim: #4a7a4a
-const GREEN_GLOW: Color = Color::Rgb(168, 232, 168);// --green-glow: #a8e8a8
-const AMBER: Color = Color::Rgb(212, 179, 106);     // --amber: #d4b36a
-const RED: Color = Color::Rgb(209, 127, 127);        // --red: #d17f7f
-const CYAN: Color = Color::Rgb(127, 200, 209);       // --cyan: #7fc8d1
-const VIOLET: Color = Color::Rgb(179, 156, 209);     // --violet: #b39cd1
-const FG: Color = Color::Rgb(215, 215, 215);         // --fg: #d7d7d7
-const DIM: Color = Color::Rgb(138, 138, 138);        // --fg-dim: #8a8a8a
-const DIMMER: Color = Color::Rgb(85, 85, 85);        // --fg-mute: #555555
-const BORDER: Color = Color::Rgb(36, 36, 36);        // --line: #242424
-const BORDER_SOFT: Color = Color::Rgb(26, 26, 26);   // --line-soft: #1a1a1a
-const BG: Color = Color::Rgb(10, 10, 10);            // --bg: #0a0a0a
-const BG_ALT: Color = Color::Rgb(15, 15, 15);        // --bg-alt: #0f0f0f
-const BG_SELECT: Color = Color::Rgb(22, 34, 26);     // --bg-sel: #16221a
+const GREEN: Color = Color::Rgb(127, 209, 127); // --green: #7fd17f
+const GREEN_DIM: Color = Color::Rgb(74, 122, 74); // --green-dim: #4a7a4a
+const GREEN_GLOW: Color = Color::Rgb(168, 232, 168); // --green-glow: #a8e8a8
+const AMBER: Color = Color::Rgb(212, 179, 106); // --amber: #d4b36a
+const RED: Color = Color::Rgb(209, 127, 127); // --red: #d17f7f
+const CYAN: Color = Color::Rgb(127, 200, 209); // --cyan: #7fc8d1
+const VIOLET: Color = Color::Rgb(179, 156, 209); // --violet: #b39cd1
+const FG: Color = Color::Rgb(215, 215, 215); // --fg: #d7d7d7
+const DIM: Color = Color::Rgb(138, 138, 138); // --fg-dim: #8a8a8a
+const DIMMER: Color = Color::Rgb(85, 85, 85); // --fg-mute: #555555
+const BORDER: Color = Color::Rgb(36, 36, 36); // --line: #242424
+const BORDER_SOFT: Color = Color::Rgb(26, 26, 26); // --line-soft: #1a1a1a
+const BG: Color = Color::Rgb(10, 10, 10); // --bg: #0a0a0a
+const BG_ALT: Color = Color::Rgb(15, 15, 15); // --bg-alt: #0f0f0f
+const BG_SELECT: Color = Color::Rgb(22, 34, 26); // --bg-sel: #16221a
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -879,9 +879,9 @@ fn ui(f: &mut Frame, app: &mut App) {
             let body = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Length(32),  // left: sessions list
-                    Constraint::Min(40),     // center: session detail
-                    Constraint::Length(38),   // right: metrics + logs
+                    Constraint::Length(32), // left: sessions list
+                    Constraint::Min(40),    // center: session detail
+                    Constraint::Length(38), // right: metrics + logs
                 ])
                 .margin(0)
                 .split(chunks[1]);
@@ -934,7 +934,10 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let line = Line::from(vec![
-        Span::styled("▞ relay", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "▞ relay",
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(
             format!(" v{}", env!("CARGO_PKG_VERSION")),
             Style::default().fg(DIMMER),
@@ -942,13 +945,25 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         Span::styled(" │ ", Style::default().fg(DIMMER)),
         Span::styled("session monitor", Style::default().fg(DIM)),
         Span::styled("    ", Style::default()),
-        Span::styled(format!("{}", running), Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", running),
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" running  ", Style::default().fg(DIM)),
-        Span::styled(format!("{}", waiting), Style::default().fg(FG).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", waiting),
+            Style::default().fg(FG).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" waiting  ", Style::default().fg(DIM)),
-        Span::styled(format!("{}", idle_n), Style::default().fg(FG).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", idle_n),
+            Style::default().fg(FG).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" idle  ", Style::default().fg(DIM)),
-        Span::styled(format!("{}", err_n), Style::default().fg(RED).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", err_n),
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" ended", Style::default().fg(DIM)),
         Span::styled("    ", Style::default()),
         Span::styled(auto_indicator, Style::default().fg(auto_color)),
@@ -1120,7 +1135,8 @@ fn render_sessions_list(f: &mut Frame, app: &mut App, area: Rect) {
         let age = util::format_duration(parsed.age_secs);
         let spark_w = (inner.width as usize).saturating_sub(age.len() + 10);
         let spark = mini_sparkline(&parsed.context_history, spark_w.min(12));
-        let total_tok = parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
+        let total_tok =
+            parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
         lines.push(Line::from(vec![
             Span::styled("  ", Style::default().bg(bg)),
             Span::styled(age, Style::default().fg(DIM).bg(bg)),
@@ -1172,8 +1188,7 @@ fn render_center_panel(f: &mut Frame, app: &mut App, area: Rect) {
             let inner = block.inner(area);
             f.render_widget(block, area);
             f.render_widget(
-                Paragraph::new("  no session selected")
-                    .style(Style::default().fg(DIMMER)),
+                Paragraph::new("  no session selected").style(Style::default().fg(DIMMER)),
                 inner,
             );
             return;
@@ -1200,7 +1215,11 @@ fn render_center_panel(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::default().fg(if focused { GREEN } else { DIM }),
             ),
             Span::styled(
-                format!("   {} · {}", util::short_session_id(&info.session_id), model_display),
+                format!(
+                    "   {} · {}",
+                    util::short_session_id(&info.session_id),
+                    model_display
+                ),
                 Style::default().fg(DIMMER),
             ),
         ]))
@@ -1223,9 +1242,9 @@ fn render_center_panel(f: &mut Frame, app: &mut App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),       // detail head
-            Constraint::Length(3),       // KPIs strip
-            Constraint::Min(4),          // tool timeline
+            Constraint::Length(3),        // detail head
+            Constraint::Length(3),        // KPIs strip
+            Constraint::Min(4),           // tool timeline
             Constraint::Length(bottom_h), // files/messages
         ])
         .split(inner);
@@ -1290,9 +1309,10 @@ fn render_detail_head(
         "~",
     );
     let has_branch = !parsed.git_branch.is_empty() && parsed.git_branch != "HEAD";
-    let mut path_spans = vec![
-        Span::styled(format!(" {}", cwd_display), Style::default().fg(DIMMER)),
-    ];
+    let mut path_spans = vec![Span::styled(
+        format!(" {}", cwd_display),
+        Style::default().fg(DIMMER),
+    )];
     if has_branch {
         path_spans.push(Span::styled(" on ", Style::default().fg(DIMMER)));
         path_spans.push(Span::styled(
@@ -1320,12 +1340,7 @@ fn render_detail_head(
     f.render_widget(Paragraph::new(lines), area);
 }
 
-fn render_kpis(
-    f: &mut Frame,
-    parsed: &ParsedSession,
-    status: Option<&SessionStatus>,
-    area: Rect,
-) {
+fn render_kpis(f: &mut Frame, parsed: &ParsedSession, status: Option<&SessionStatus>, area: Rect) {
     if area.width < 20 || area.height < 2 {
         return;
     }
@@ -1369,7 +1384,10 @@ fn render_kpis(
         "─".repeat(area.width as usize),
         Style::default().fg(BORDER),
     ));
-    f.render_widget(Paragraph::new(vec![sep_line.clone()]), Rect { height: 1, ..area });
+    f.render_widget(
+        Paragraph::new(vec![sep_line.clone()]),
+        Rect { height: 1, ..area },
+    );
 
     let kpi_area = Rect {
         y: area.y + 1,
@@ -1392,8 +1410,14 @@ fn render_kpis(
         Paragraph::new(vec![
             Line::from(Span::styled(" TOKENS", Style::default().fg(DIMMER))),
             Line::from(vec![
-                Span::styled(format!(" {}", format_tokens(current_ctx)), Style::default().fg(FG).add_modifier(Modifier::BOLD)),
-                Span::styled(format!(" / {}", format_tokens(window)), Style::default().fg(DIM)),
+                Span::styled(
+                    format!(" {}", format_tokens(current_ctx)),
+                    Style::default().fg(FG).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" / {}", format_tokens(window)),
+                    Style::default().fg(DIM),
+                ),
             ]),
         ]),
         kpi_cols[0],
@@ -1442,16 +1466,11 @@ fn render_tool_timeline(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
     }
 
     // Title line
-    let title = Line::from(vec![
-        Span::styled(" TOOL CALLS · LIVE", Style::default().fg(DIM)),
-    ]);
-    f.render_widget(
-        Paragraph::new(vec![title]),
-        Rect {
-            height: 1,
-            ..area
-        },
-    );
+    let title = Line::from(vec![Span::styled(
+        " TOOL CALLS · LIVE",
+        Style::default().fg(DIM),
+    )]);
+    f.render_widget(Paragraph::new(vec![title]), Rect { height: 1, ..area });
 
     let body = Rect {
         y: area.y + 1,
@@ -1518,12 +1537,10 @@ fn render_files_messages(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
 
     // Files panel
     {
-        let title = Line::from(vec![
-            Span::styled(
-                format!(" FILES CHANGED · {}", parsed.files_touched.len()),
-                Style::default().fg(DIM),
-            ),
-        ]);
+        let title = Line::from(vec![Span::styled(
+            format!(" FILES CHANGED · {}", parsed.files_touched.len()),
+            Style::default().fg(DIM),
+        )]);
         let body_area = Rect {
             y: cols[0].y + 1,
             height: cols[0].height.saturating_sub(1),
@@ -1552,9 +1569,10 @@ fn render_files_messages(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
             let display: String = display.chars().take(max_w).collect();
 
             // Determine file action from tool uses
-            let is_new = parsed.tool_uses.iter().any(|t| {
-                t.name == "Write" && t.input_summary.contains(&display)
-            });
+            let is_new = parsed
+                .tool_uses
+                .iter()
+                .any(|t| t.name == "Write" && t.input_summary.contains(&display));
             let marker = if is_new { "A" } else { "M" };
             let marker_color = if is_new { GREEN } else { AMBER };
 
@@ -1575,12 +1593,10 @@ fn render_files_messages(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
     // Messages panel
     {
         let msg_count = parsed.user_messages.len() + parsed.assistant_messages.len();
-        let title = Line::from(vec![
-            Span::styled(
-                format!(" PROMPTS · {}", msg_count),
-                Style::default().fg(DIM),
-            ),
-        ]);
+        let title = Line::from(vec![Span::styled(
+            format!(" PROMPTS · {}", msg_count),
+            Style::default().fg(DIM),
+        )]);
         let body_area = Rect {
             y: cols[1].y + 1,
             height: cols[1].height.saturating_sub(1),
@@ -1598,7 +1614,10 @@ fn render_files_messages(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
         let mut msg_lines: Vec<Line> = Vec::new();
 
         // Pair user[i] / assistant[i] — each user prompt followed by its response
-        let max_pairs = parsed.user_messages.len().max(parsed.assistant_messages.len());
+        let max_pairs = parsed
+            .user_messages
+            .len()
+            .max(parsed.assistant_messages.len());
         let mut all_msgs: Vec<(bool, &str)> = Vec::new();
         for i in 0..max_pairs {
             if let Some(msg) = parsed.user_messages.get(i) {
@@ -1699,7 +1718,8 @@ fn render_metrics_section(
     let mut lines: Vec<Line> = Vec::new();
 
     // tokens/s
-    let total_tok = parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
+    let total_tok =
+        parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
     let tok_sec = if parsed.age_secs > 0 {
         total_tok / parsed.age_secs
     } else {
@@ -1707,7 +1727,10 @@ fn render_metrics_section(
     };
 
     lines.push(Line::from(vec![
-        Span::styled(" tokens / s", Style::default().fg(FG).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " tokens / s",
+            Style::default().fg(FG).add_modifier(Modifier::BOLD),
+        ),
         Span::styled("  throughput", Style::default().fg(DIMMER)),
     ]));
     lines.push(Line::from(vec![
@@ -1729,9 +1752,10 @@ fn render_metrics_section(
     lines.push(Line::from(""));
 
     // Usage (quota bars)
-    lines.push(Line::from(vec![
-        Span::styled(" Usage", Style::default().fg(FG).add_modifier(Modifier::BOLD)),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        " Usage",
+        Style::default().fg(FG).add_modifier(Modifier::BOLD),
+    )]));
 
     if let Some(s) = status {
         let bar_w = (area.width as usize).saturating_sub(14).min(12);
@@ -1758,7 +1782,10 @@ fn render_metrics_section(
             ]));
         }
     } else {
-        lines.push(Line::from(Span::styled(" no live data", Style::default().fg(DIMMER))));
+        lines.push(Line::from(Span::styled(
+            " no live data",
+            Style::default().fg(DIMMER),
+        )));
     }
 
     f.render_widget(Paragraph::new(lines), area);
@@ -1787,16 +1814,13 @@ fn render_budget_section(
         (p, w)
     };
 
-    let total_tok = parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
+    let total_tok =
+        parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
 
     lines.push(Line::from(vec![
         Span::styled(" context window", Style::default().fg(DIM)),
         Span::styled(
-            format!(
-                "  {}k / {}k",
-                total_tok / 1000,
-                window / 1000
-            ),
+            format!("  {}k / {}k", total_tok / 1000, window / 1000),
             Style::default().fg(FG).add_modifier(Modifier::BOLD),
         ),
     ]));
@@ -1805,7 +1829,13 @@ fn render_budget_section(
     let bar_w = (area.width as usize).saturating_sub(4).min(30);
     let filled = ((pct / 100.0) * bar_w as f64).round() as usize;
     let empty = bar_w.saturating_sub(filled);
-    let bar_color = if pct > 80.0 { RED } else if pct > 60.0 { AMBER } else { GREEN_DIM };
+    let bar_color = if pct > 80.0 {
+        RED
+    } else if pct > 60.0 {
+        AMBER
+    } else {
+        GREEN_DIM
+    };
     lines.push(Line::from(vec![
         Span::raw(" "),
         Span::styled("█".repeat(filled), Style::default().fg(bar_color)),
@@ -1844,10 +1874,7 @@ fn render_activity_log(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
         Span::styled("  ●", Style::default().fg(GREEN)),
         Span::styled(" live", Style::default().fg(DIMMER)),
     ]);
-    f.render_widget(
-        Paragraph::new(vec![title]),
-        Rect { height: 1, ..area },
-    );
+    f.render_widget(Paragraph::new(vec![title]), Rect { height: 1, ..area });
 
     let body = Rect {
         y: area.y + 1,
@@ -1877,7 +1904,13 @@ fn render_activity_log(f: &mut Frame, parsed: &ParsedSession, area: Rect) {
 
         lines.push(Line::from(vec![
             Span::styled(format!(" {}", ts), Style::default().fg(DIMMER)),
-            Span::styled(format!(" {:<4}", tool.name.to_uppercase().get(..4).unwrap_or(&tool.name)), Style::default().fg(level_color)),
+            Span::styled(
+                format!(
+                    " {:<4}",
+                    tool.name.to_uppercase().get(..4).unwrap_or(&tool.name)
+                ),
+                Style::default().fg(level_color),
+            ),
             Span::styled(format!(" {}", summary), Style::default().fg(FG)),
         ]));
     }
@@ -1970,7 +2003,10 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     if let Some((ref msg, at)) = app.status_msg {
         if at.elapsed() < Duration::from_secs(4) {
             let line = Line::from(Span::styled(format!(" {msg}"), Style::default().fg(GREEN)));
-            f.render_widget(Paragraph::new(line).style(Style::default().bg(BG_ALT)), area);
+            f.render_widget(
+                Paragraph::new(line).style(Style::default().bg(BG_ALT)),
+                area,
+            );
             return;
         }
     }
@@ -1993,7 +2029,10 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             format!(" {} ", key),
             Style::default().fg(FG).bg(Color::Rgb(20, 20, 20)),
         ));
-        spans.push(Span::styled(format!("{} ", label), Style::default().fg(DIM)));
+        spans.push(Span::styled(
+            format!("{} ", label),
+            Style::default().fg(DIM),
+        ));
     }
 
     let right_text = format!("v{} │ github.com/LuluHow/relay ", env!("CARGO_PKG_VERSION"));
@@ -2003,7 +2042,10 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     spans.push(Span::styled(right_text, Style::default().fg(DIMMER)));
 
     let line = Line::from(spans);
-    f.render_widget(Paragraph::new(line).style(Style::default().bg(BG_ALT)), area);
+    f.render_widget(
+        Paragraph::new(line).style(Style::default().bg(BG_ALT)),
+        area,
+    );
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
