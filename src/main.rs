@@ -94,8 +94,8 @@ fn main() -> Result<()> {
             };
 
             if shell.contains("fish") {
-                println!("Note: the shell wrapper requires bash or zsh.");
-                println!("If you use fish, add a bash/zsh alias or run claude from bash.");
+                println!("Add this to your ~/{rc_file}:");
+                println!("  source ~/.relay/claude-wrapper.fish");
             } else {
                 println!("Add this to your ~/{rc_file}:");
                 println!("  source ~/.relay/claude-wrapper.sh");

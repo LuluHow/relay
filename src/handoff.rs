@@ -154,3 +154,128 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", &cleaned[..end])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::{ConversationTurn, ParsedSession, ToolUse};
+
+    fn mock_session() -> ParsedSession {
+        ParsedSession {
+            session_id: "abc12345-test".to_string(),
+            project_name: "test-project".to_string(),
+            model: "claude-sonnet-4-5-20241022".to_string(),
+            git_branch: "main".to_string(),
+            cwd: "/tmp/test".to_string(),
+            version: "1.0.0".to_string(),
+            user_messages: vec![ConversationTurn {
+                content: "Build a REST API".to_string(),
+                timestamp: Some("2025-01-01T00:00:00Z".to_string()),
+            }],
+            assistant_messages: vec![ConversationTurn {
+                content: "I'll create the API endpoints.".to_string(),
+                timestamp: Some("2025-01-01T00:01:00Z".to_string()),
+            }],
+            tool_uses: vec![ToolUse {
+                name: "Write".to_string(),
+                input_summary: "/tmp/test/src/main.rs".to_string(),
+                timestamp: None,
+            }],
+            total_input_tokens: 5000,
+            total_output_tokens: 2000,
+            total_cache_read: 1000,
+            total_cache_create: 500,
+            current_context_tokens: 6000,
+            context_history: vec![3000, 6000],
+            compaction_count: 0,
+            turn_count: 5,
+            first_timestamp: Some("2025-01-01T00:00:00Z".to_string()),
+            last_timestamp: Some("2025-01-01T00:10:00Z".to_string()),
+            age_secs: 600,
+            files_touched: vec!["/tmp/test/src/main.rs".to_string()],
+        }
+    }
+
+    #[test]
+    fn test_generate_handoff_contains_key_sections() {
+        let session = mock_session();
+        let result = generate(&session).unwrap();
+        assert!(result.contains("# Handoff — test-project"));
+        assert!(result.contains("## Goal"));
+        assert!(result.contains("Build a REST API"));
+        assert!(result.contains("## Last assistant state"));
+        assert!(result.contains("## Recent tool activity"));
+        assert!(result.contains("## Files touched"));
+        assert!(result.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn test_generate_handoff_includes_branch() {
+        let session = mock_session();
+        let result = generate(&session).unwrap();
+        assert!(result.contains("**Branch:** `main`"));
+    }
+
+    #[test]
+    fn test_generate_handoff_no_branch_if_head() {
+        let mut session = mock_session();
+        session.git_branch = "HEAD".to_string();
+        let result = generate(&session).unwrap();
+        assert!(!result.contains("**Branch:**"));
+    }
+
+    #[test]
+    fn test_truncate_short() {
+        assert_eq!(truncate("hello world", 100), "hello world");
+    }
+
+    #[test]
+    fn test_truncate_long() {
+        let long = "a ".repeat(100);
+        let result = truncate(&long, 10);
+        assert!(result.ends_with("..."));
+        // 10 chars + "..." = 13 max
+        assert!(result.len() <= 14);
+    }
+
+    #[test]
+    fn test_truncate_collapses_whitespace() {
+        assert_eq!(truncate("hello   world", 100), "hello world");
+    }
+
+    #[test]
+    fn test_is_relay_handoff_detects_auto_handoff() {
+        assert!(is_relay_handoff(
+            "Context from a previous session (auto-handoff by relay, context at 80%). Resume:"
+        ));
+    }
+
+    #[test]
+    fn test_is_relay_handoff_detects_header() {
+        assert!(is_relay_handoff(
+            "# Handoff — myproject\n\n**Date:** 2025-01-01"
+        ));
+    }
+
+    #[test]
+    fn test_is_relay_handoff_rejects_normal() {
+        assert!(!is_relay_handoff("Build a REST API for the dashboard"));
+    }
+
+    #[test]
+    fn test_first_real_user_message_skips_handoff() {
+        let messages = vec![
+            ConversationTurn {
+                content: "Context from a previous session (auto-handoff by relay, ctx)."
+                    .to_string(),
+                timestamp: None,
+            },
+            ConversationTurn {
+                content: "Build a REST API".to_string(),
+                timestamp: None,
+            },
+        ];
+        let first = first_real_user_message(&messages).unwrap();
+        assert_eq!(first.content, "Build a REST API");
+    }
+}

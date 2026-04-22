@@ -368,7 +368,13 @@ impl App {
             "Context from a previous session (auto-handoff by relay, {}). Resume where we left off:\n\n---\n\n{}",
             reason, hoff
         );
-        let next_prompt_path = dirs::home_dir().unwrap().join(".relay").join("next_prompt");
+        let next_prompt_path = match dirs::home_dir() {
+            Some(h) => h.join(".relay").join("next_prompt"),
+            None => {
+                self.status_msg = Some(("no home directory".to_string(), Instant::now()));
+                return;
+            }
+        };
         if let Err(e) = std::fs::write(&next_prompt_path, &prompt) {
             self.status_msg = Some((format!("write next_prompt: {e}"), Instant::now()));
             return;
@@ -473,7 +479,10 @@ impl App {
         };
         self.pending_restart = None;
 
-        let next_prompt = dirs::home_dir().unwrap().join(".relay").join("next_prompt");
+        let next_prompt = match dirs::home_dir() {
+            Some(h) => h.join(".relay").join("next_prompt"),
+            None => return,
+        };
 
         if !next_prompt.exists() {
             // Wrapper consumed it — restart handled
@@ -547,10 +556,10 @@ fn find_claude_pid(jsonl_path: &std::path::Path) -> Option<u32> {
         return Some(pid);
     }
 
-    // Fallback: pgrep for claude, excluding our own PID
+    // Fallback: pgrep for exact process name "claude", excluding our own PID
     let my_pid = std::process::id();
     let output = Command::new("pgrep")
-        .args(["-f", "claude"])
+        .args(["-x", "claude"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .output()
@@ -580,11 +589,12 @@ fn spawn_claude_in_terminal(cwd: &str) -> bool {
     let next_prompt = home.join(".relay").join("next_prompt");
     let restart_script = home.join(".relay").join("restart.sh");
 
+    let next_prompt_escaped = next_prompt.display().to_string().replace('\'', "'\\''");
     let script_content = format!(
         "#!/bin/bash\ncd '{}'\nstty sane 2>/dev/null\nprompt=$(cat '{}')\nrm -f '{}'\nprintf '\\n  \\033[36mrelay:\\033[0m restarting claude session...\\n\\n'\nsleep 2\nexec claude \"$prompt\"\n",
         cwd.replace('\'', "'\\''"),
-        next_prompt.display(),
-        next_prompt.display(),
+        next_prompt_escaped,
+        next_prompt_escaped,
     );
 
     if std::fs::write(&restart_script, &script_content).is_err() {
@@ -598,9 +608,14 @@ fn spawn_claude_in_terminal(cwd: &str) -> bool {
 
     #[cfg(target_os = "macos")]
     {
+        let script_path_escaped = restart_script
+            .display()
+            .to_string()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
         let applescript = format!(
             "tell application \"Terminal\"\nactivate\ndo script \"bash '{}'\"\nend tell",
-            restart_script.display()
+            script_path_escaped
         );
         return Command::new("osascript")
             .arg("-e")

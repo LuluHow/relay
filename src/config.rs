@@ -31,7 +31,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            threshold: 20,
+            threshold: 75,
             max_turns: 0,
             interval: 10,
             cooldown: 5,
@@ -54,8 +54,8 @@ const DEFAULT_CONFIG: &str = "\
 # Requires sourcing the shell wrapper: source ~/.relay/claude-wrapper.sh
 auto_handoff = false
 
-# Context % remaining to trigger handoff
-threshold = 20
+# Context % used to trigger handoff
+threshold = 75
 
 # Max conversation turns before handoff (0 = disabled)
 max_turns = 0
@@ -103,6 +103,25 @@ claude() {
 }
 "#;
 
+const FISH_WRAPPER: &str = r#"# relay — Claude Code wrapper for auto-handoff (fish shell)
+# Source this file in your config.fish:
+#   source ~/.relay/claude-wrapper.fish
+
+function claude
+    command claude $argv
+    stty sane 2>/dev/null
+    while test -f "$HOME/.relay/next_prompt"
+        set -l prompt (cat "$HOME/.relay/next_prompt")
+        rm -f "$HOME/.relay/next_prompt"
+        test -z "$prompt"; and break
+        printf '\n  \033[36mrelay:\033[0m handoff detected, restarting in 5s...\n\n'
+        sleep 5
+        command claude "$prompt"
+        stty sane 2>/dev/null
+    end
+end
+"#;
+
 pub fn path() -> Result<PathBuf> {
     Ok(dirs::home_dir()
         .context("No home directory")?
@@ -131,9 +150,11 @@ pub fn ensure_default() -> Result<PathBuf> {
         std::fs::write(&p, DEFAULT_CONFIG)?;
     }
 
-    // Always (re)create the shell wrapper
+    // Always (re)create the shell wrappers
     let wrapper = p.parent().unwrap().join("claude-wrapper.sh");
     std::fs::write(&wrapper, SHELL_WRAPPER)?;
+    let fish_wrapper = p.parent().unwrap().join("claude-wrapper.fish");
+    std::fs::write(&fish_wrapper, FISH_WRAPPER)?;
 
     Ok(p)
 }
