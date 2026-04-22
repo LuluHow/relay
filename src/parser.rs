@@ -340,3 +340,171 @@ fn summarize_tool_input(name: &str, input: &serde_json::Value) -> String {
         _ => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_text_content_string() {
+        let val = serde_json::json!("hello world");
+        assert_eq!(extract_text_content(&val), "hello world");
+    }
+
+    #[test]
+    fn test_extract_text_content_array() {
+        let val = serde_json::json!([
+            {"type": "text", "text": "hello"},
+            {"type": "text", "text": "world"}
+        ]);
+        assert_eq!(extract_text_content(&val), "hello\nworld");
+    }
+
+    #[test]
+    fn test_extract_text_content_null() {
+        let val = serde_json::json!(null);
+        assert_eq!(extract_text_content(&val), "");
+    }
+
+    #[test]
+    fn test_extract_text_content_ignores_non_text() {
+        let val = serde_json::json!([
+            {"type": "tool_use", "name": "Bash"},
+            {"type": "text", "text": "result"}
+        ]);
+        assert_eq!(extract_text_content(&val), "result");
+    }
+
+    #[test]
+    fn test_parse_minimal_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            r#"{"type":"user","message":{"role":"user","content":"hello"},"timestamp":"2025-01-01T00:00:00Z"}"#, "\n",
+            r#"{"type":"assistant","message":{"role":"assistant","content":"hi","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-session".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert_eq!(parsed.model, "claude-sonnet-4-5-20241022");
+        assert_eq!(parsed.total_input_tokens, 100);
+        assert_eq!(parsed.total_output_tokens, 50);
+        assert_eq!(parsed.turn_count, 1);
+        assert!(!parsed.user_messages.is_empty());
+    }
+
+    #[test]
+    fn test_compaction_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":"a","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":10000,"output_tokens":100,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+            r#"{"type":"assistant","message":{"role":"assistant","content":"b","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":3000,"output_tokens":100,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-compact".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert_eq!(parsed.compaction_count, 1);
+    }
+
+    #[test]
+    fn test_no_compaction_on_small_drop() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":"a","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":10000,"output_tokens":100,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+            r#"{"type":"assistant","message":{"role":"assistant","content":"b","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":8000,"output_tokens":100,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-no-compact".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert_eq!(parsed.compaction_count, 0);
+    }
+
+    #[test]
+    fn test_skips_malformed_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            "not json at all\n",
+            r#"{"type":"user","message":{"role":"user","content":"hello"}}"#, "\n",
+            "{broken json\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-malformed".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert!(!parsed.user_messages.is_empty());
+    }
+
+    #[test]
+    fn test_skips_sidechains() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":"main","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"message":{"role":"assistant","content":"side","model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":200,"output_tokens":100,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-sidechain".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert_eq!(parsed.turn_count, 1);
+        assert_eq!(parsed.total_input_tokens, 100);
+    }
+
+    #[test]
+    fn test_tool_use_extraction() {
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+        std::fs::write(&jsonl_path, concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test/foo.rs"}},{"type":"text","text":"Editing file"}],"model":"claude-sonnet-4-5-20241022","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#, "\n",
+        )).unwrap();
+
+        let info = SessionInfo {
+            session_id: "test-tools".to_string(),
+            project_path: "/tmp/test".to_string(),
+            project_name: "test".to_string(),
+            jsonl_path,
+            modified: std::time::SystemTime::now(),
+        };
+
+        let parsed = parse_session(&info).unwrap();
+        assert_eq!(parsed.tool_uses.len(), 1);
+        assert_eq!(parsed.tool_uses[0].name, "Edit");
+        assert!(parsed.files_touched.contains(&"/tmp/test/foo.rs".to_string()));
+    }
+}
