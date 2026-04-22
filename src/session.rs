@@ -1,0 +1,305 @@
+use anyhow::{bail, Context, Result};
+use colored::Colorize;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::SystemTime;
+
+use crate::parser;
+
+/// Infer context window size from model slug and observed token usage
+fn context_window(model: &str, observed_tokens: u64) -> u64 {
+    let m = model.to_lowercase();
+    if m.contains("[1m]") || m.contains("opus") || observed_tokens > 180_000 {
+        1_000_000
+    } else {
+        200_000
+    }
+}
+
+// ── Session state classification ────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    Working, // age < 30s, process alive
+    Waiting, // age < 300s, process alive
+    Ended,   // age < 300s, process NOT alive
+    Idle,    // age >= 300s
+}
+
+impl SessionState {
+    pub fn sort_key(self) -> u8 {
+        match self {
+            SessionState::Working => 0,
+            SessionState::Waiting => 1,
+            SessionState::Ended => 2,
+            SessionState::Idle => 3,
+        }
+    }
+
+    pub fn is_active(self) -> bool {
+        matches!(self, SessionState::Working | SessionState::Waiting)
+    }
+}
+
+/// Classify session state from age and process liveness.
+pub fn classify_state(age_secs: u64, process_dead: bool) -> SessionState {
+    if age_secs >= 300 {
+        SessionState::Idle
+    } else if process_dead {
+        SessionState::Ended
+    } else if age_secs < 30 {
+        SessionState::Working
+    } else {
+        SessionState::Waiting
+    }
+}
+
+// ── Process detection ───────────────────────────────────────────────────────
+
+use std::collections::HashMap;
+
+/// Discover running Claude processes via `lsof -c claude -a -d cwd`.
+/// Returns a map of encoded project directory name → list of PIDs.
+/// The key matches the directory names under `~/.claude/projects/`.
+pub fn discover_claude_pids() -> HashMap<String, Vec<u32>> {
+    let output = match Command::new("lsof")
+        .args(["-c", "claude", "-a", "-d", "cwd", "-Fn"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return HashMap::new(),
+    };
+
+    let mut map: HashMap<String, Vec<u32>> = HashMap::new();
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut current_pid: Option<u32> = None;
+
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix('p') {
+            current_pid = rest.parse().ok();
+        } else if let Some(rest) = line.strip_prefix('n') {
+            if let Some(pid) = current_pid {
+                let encoded = rest.replace('/', "-");
+                map.entry(encoded).or_default().push(pid);
+            }
+        }
+    }
+    map
+}
+
+/// Check if a session's project has a running Claude process.
+pub fn is_session_alive(jsonl_path: &Path, claude_pids: &HashMap<String, Vec<u32>>) -> bool {
+    project_dir_name(jsonl_path)
+        .map(|name| claude_pids.contains_key(&name))
+        .unwrap_or(false)
+}
+
+/// Find a Claude PID for a session's project (for killing).
+pub fn find_session_pid(jsonl_path: &Path, claude_pids: &HashMap<String, Vec<u32>>) -> Option<u32> {
+    project_dir_name(jsonl_path)
+        .and_then(|name| claude_pids.get(&name))
+        .and_then(|pids| pids.first().copied())
+}
+
+fn project_dir_name(jsonl_path: &Path) -> Option<String> {
+    jsonl_path
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+}
+
+// ── Session discovery ───────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+    pub session_id: String,
+    pub project_path: String,
+    pub project_name: String,
+    pub jsonl_path: PathBuf,
+    pub modified: SystemTime,
+}
+
+/// Discover all Claude Code sessions from ~/.claude/projects/
+pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
+    let claude_dir = dirs::home_dir()
+        .context("No home directory")?
+        .join(".claude")
+        .join("projects");
+
+    if !claude_dir.exists() {
+        bail!("No Claude Code projects directory found at {}", claude_dir.display());
+    }
+
+    let mut sessions = Vec::new();
+
+    for project_entry in std::fs::read_dir(&claude_dir)? {
+        let project_entry = project_entry?;
+        let project_dir = project_entry.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+
+        let project_encoded = project_entry.file_name().to_string_lossy().to_string();
+        // Decode: -Users-foo-bar -> /Users/foo/bar
+        let project_path = project_encoded.replace('-', "/");
+        let project_name = project_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(&project_path)
+            .to_string();
+
+        for file_entry in std::fs::read_dir(&project_dir)? {
+            let file_entry = file_entry?;
+            let path = file_entry.path();
+            if path.extension().map_or(true, |e| e != "jsonl") {
+                continue;
+            }
+            // Skip subagent directories
+            if path.to_string_lossy().contains("subagents") {
+                continue;
+            }
+
+            let session_id = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            let modified = file_entry.metadata()?.modified()?;
+
+            sessions.push(SessionInfo {
+                session_id,
+                project_path: project_path.clone(),
+                project_name: project_name.clone(),
+                jsonl_path: path,
+                modified,
+            });
+        }
+    }
+
+    // Sort by most recently modified first
+    sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
+    Ok(sessions)
+}
+
+/// Pick a session: by explicit ID, by project filter, or the most recent
+pub fn pick_session(
+    sessions: &[SessionInfo],
+    session_id: Option<&str>,
+    project: Option<&str>,
+) -> Result<SessionInfo> {
+    if sessions.is_empty() {
+        bail!("No Claude Code sessions found");
+    }
+
+    if let Some(id) = session_id {
+        return sessions
+            .iter()
+            .find(|s| s.session_id.starts_with(id))
+            .cloned()
+            .context(format!("No session matching '{id}'"));
+    }
+
+    if let Some(proj) = project {
+        let proj_lower = proj.to_lowercase();
+        return sessions
+            .iter()
+            .find(|s| s.project_name.to_lowercase().contains(&proj_lower))
+            .cloned()
+            .context(format!("No session for project matching '{proj}'"));
+    }
+
+    // Default: most recent
+    Ok(sessions[0].clone())
+}
+
+/// Print status of all recent sessions
+pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
+    if sessions.is_empty() {
+        println!("No sessions found.");
+        return Ok(());
+    }
+
+    let now = SystemTime::now();
+    let limit = 10.min(sessions.len());
+    let claude_pids = discover_claude_pids();
+
+    println!(
+        "{}",
+        format!(" {:^8} {:^14} {:^10} {:^7} {:^6} {:>7}  {}",
+            "STATUS", "PROJECT", "MODEL", "CONTEXT", "TURNS", "AGE", "SESSION"
+        ).bold()
+    );
+
+    for s in &sessions[..limit] {
+        let parsed = parser::parse_session(s)?;
+
+        let age = now
+            .duration_since(s.modified)
+            .map(|d| format_duration(d.as_secs()))
+            .unwrap_or_else(|_| "?".into());
+
+        let window = context_window(&parsed.model, parsed.current_context_tokens);
+        let pct = if window > 0 {
+            (parsed.current_context_tokens as f64 / window as f64 * 100.0) as u8
+        } else {
+            0
+        };
+
+        let process_dead = if parsed.age_secs < 300 {
+            !is_session_alive(&s.jsonl_path, &claude_pids)
+        } else {
+            false
+        };
+        let state = classify_state(parsed.age_secs, process_dead);
+        let status = match state {
+            SessionState::Working => "working".green(),
+            SessionState::Waiting => "waiting".yellow(),
+            SessionState::Ended => "ended".red(),
+            SessionState::Idle => "idle".dimmed(),
+        };
+
+        let context_display = format!("{}%", pct);
+        let context_colored = if pct >= 90 {
+            context_display.red().bold()
+        } else if pct >= 70 {
+            context_display.yellow()
+        } else {
+            context_display.normal()
+        };
+
+        let model_short = parsed.model
+            .replace("claude-", "")
+            .replace("-20", "");
+
+        println!(
+            " {:>8} {:>14} {:>10} {:>7} {:>6} {:>7}  {}",
+            status,
+            s.project_name.chars().take(14).collect::<String>(),
+            model_short.chars().take(10).collect::<String>(),
+            context_colored,
+            parsed.turn_count,
+            age,
+            &s.session_id[..8],
+        );
+    }
+
+    if sessions.len() > limit {
+        println!(" ... and {} more sessions", sessions.len() - limit);
+    }
+
+    Ok(())
+}
+
+fn format_duration(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}d", secs / 86400)
+    }
+}
