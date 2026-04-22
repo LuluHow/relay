@@ -184,7 +184,8 @@ fn truncate(s: &str, max: usize) -> String {
     if cleaned.len() <= max {
         cleaned
     } else {
-        format!("{}...", &cleaned[..max])
+        let end = cleaned.floor_char_boundary(max);
+        format!("{}...", &cleaned[..end])
     }
 }
 
