@@ -55,21 +55,9 @@ fn mime_for_path(path: &str) -> &'static str {
     }
 }
 
-/// Start the relay API server.
-pub async fn serve(config: Config, bind: String) -> Result<()> {
-    let app_state = AppState::new(config);
-
-    // Background task: refresh session data every 3 seconds
-    let poll_state = app_state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
-        loop {
-            interval.tick().await;
-            poll_state.refresh().await;
-        }
-    });
-
-    let app = Router::new()
+/// Build the app router from an existing AppState (used by both `serve` and tests).
+pub fn build_app(app_state: AppState) -> Router {
+    Router::new()
         .route("/api/health", get(routes::health))
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions/{id}", get(routes::get_session))
@@ -84,7 +72,24 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
             auth::auth_middleware,
         ))
         .layer(CorsLayer::permissive())
-        .with_state(app_state);
+        .with_state(app_state)
+}
+
+/// Start the relay API server.
+pub async fn serve(config: Config, bind: String) -> Result<()> {
+    let app_state = AppState::new(config);
+
+    // Background task: refresh session data every 3 seconds
+    let poll_state = app_state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        loop {
+            interval.tick().await;
+            poll_state.refresh().await;
+        }
+    });
+
+    let app = build_app(app_state);
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     axum::serve(listener, app).await?;

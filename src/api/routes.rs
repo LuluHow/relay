@@ -46,7 +46,7 @@ struct HandoffCreatedResponse {
 }
 
 #[derive(Serialize)]
-pub(crate) struct ConfigResponse {
+pub struct ConfigResponse {
     threshold: u8,
     max_turns: u32,
     interval: u64,
@@ -134,11 +134,14 @@ pub async fn create_handoff(
     .await;
 
     match result {
-        Ok(Ok(Some(handoff_id))) => Json(HandoffCreatedResponse {
-            id: handoff_id,
-            message: "handoff saved",
-        })
-        .into_response(),
+        Ok(Ok(Some(handoff_id))) => {
+            state.notify_handoff_created(handoff_id.clone());
+            Json(HandoffCreatedResponse {
+                id: handoff_id,
+                message: "handoff saved",
+            })
+            .into_response()
+        }
         Ok(Ok(None)) => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse { error: "session not found" }),

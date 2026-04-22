@@ -162,6 +162,10 @@ impl AppState {
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.event_tx.subscribe()
     }
+
+    pub fn notify_handoff_created(&self, id: String) {
+        let _ = self.event_tx.send(Event::HandoffCreated { id });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -190,9 +194,9 @@ fn collect_handoffs() -> anyhow::Result<Vec<HandoffEntry>> {
             let created_at = meta
                 .modified()
                 .ok()
-                .and_then(|t| {
+                .map(|t| {
                     let dt: chrono::DateTime<chrono::Utc> = t.into();
-                    Some(dt.to_rfc3339())
+                    dt.to_rfc3339()
                 })
                 .unwrap_or_default();
 
