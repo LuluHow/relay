@@ -1720,11 +1720,7 @@ fn render_metrics_section(
     // tokens/s
     let total_tok =
         parsed.total_input_tokens + parsed.total_output_tokens + parsed.total_cache_read;
-    let tok_sec = if parsed.age_secs > 0 {
-        total_tok / parsed.age_secs
-    } else {
-        0
-    };
+    let tok_sec = total_tok.checked_div(parsed.age_secs).unwrap_or(0);
 
     lines.push(Line::from(vec![
         Span::styled(
