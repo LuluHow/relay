@@ -69,9 +69,9 @@ check_deps() {
 # ── Build ──────────────────────────────────────────────────────────────────
 
 build_relay() {
-    local tmpdir
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    TMPDIR_RELAY="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR_RELAY"' EXIT
+    local tmpdir="$TMPDIR_RELAY"
 
     info "Cloning relay..."
     git clone --depth 1 "$REPO" "$tmpdir/relay" 2>/dev/null
