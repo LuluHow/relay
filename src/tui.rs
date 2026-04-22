@@ -64,6 +64,8 @@ struct App {
     // Auto-handoff
     config: Config,
     triggered_sessions: HashSet<String>,
+    // Sessions pending handoff (waiting for Stop event before triggering)
+    pending_handoffs: HashSet<String>,
     // Live data from statusLine hook (keyed by session_id)
     statuses: HashMap<String, SessionStatus>,
     // Process liveness cache: session IDs confirmed dead
@@ -93,6 +95,7 @@ impl App {
             status_msg: None,
             config,
             triggered_sessions: HashSet::new(),
+            pending_handoffs: HashSet::new(),
             statuses: HashMap::new(),
             dead_sessions: HashSet::new(),
         };
@@ -250,26 +253,62 @@ impl App {
             return;
         }
 
-        // Find the first active session that triggers
-        let trigger = self
+        // Mark sessions that hit the threshold as pending (wait for Stop event)
+        let pending: Vec<String> = self
             .sessions
             .iter()
             .filter(|(info, parsed)| {
                 !self.triggered_sessions.contains(&info.session_id)
-                    && self.session_state(info, parsed) == session::SessionState::Working
+                    && !self.pending_handoffs.contains(&info.session_id)
+                    && self.session_state(info, parsed).is_active()
                     && parsed.turn_count > 2
             })
-            .find(|(_, parsed)| {
+            .filter(|(_, parsed)| {
                 let pct = context_pct(parsed);
                 let by_context = pct >= self.config.threshold;
                 let by_turns =
                     self.config.max_turns > 0 && parsed.turn_count >= self.config.max_turns;
                 by_context || by_turns
             })
-            .map(|(info, parsed)| (info.clone(), parsed.clone()));
+            .map(|(info, _)| info.session_id.clone())
+            .collect();
 
-        if let Some((info, parsed)) = trigger {
-            self.trigger_handoff(&info, &parsed);
+        for sid in pending {
+            self.pending_handoffs.insert(sid.clone());
+            let pct_msg = self
+                .sessions
+                .iter()
+                .find(|(i, _)| i.session_id == sid)
+                .map(|(_, p)| context_pct(p))
+                .unwrap_or(0);
+            self.status_msg = Some((
+                format!("threshold {}% — waiting for turn to finish...", pct_msg),
+                Instant::now(),
+            ));
+        }
+    }
+
+    fn check_pending_handoffs(&mut self) {
+        if self.pending_handoffs.is_empty() {
+            return;
+        }
+
+        let events = hooks::read_stop_events();
+        for event in &events {
+            if self.pending_handoffs.remove(&event.session_id) {
+                // Stop event arrived for a pending session — trigger handoff now
+                let session_data = self
+                    .sessions
+                    .iter()
+                    .find(|(info, _)| info.session_id == event.session_id)
+                    .map(|(info, parsed)| (info.clone(), parsed.clone()));
+
+                if let Some((info, parsed)) = session_data {
+                    self.trigger_handoff(&info, &parsed);
+                }
+
+                hooks::clear_event(&event.session_id);
+            }
         }
     }
 
@@ -552,6 +591,7 @@ fn run_loop(
         if app.last_refresh.elapsed() >= REFRESH_INTERVAL {
             app.refresh();
             app.check_auto_handoff();
+            app.check_pending_handoffs();
             app.check_auto_commit();
         }
 
