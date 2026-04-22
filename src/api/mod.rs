@@ -6,7 +6,11 @@ pub mod ws;
 use std::time::Duration;
 
 use anyhow::Result;
-use axum::Router;
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use tower_http::cors::CorsLayer;
 
 use crate::config::Config;
 use state::AppState;
@@ -25,9 +29,16 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
         }
     });
 
-    let app = Router::new();
-    // TODO: attach routes in next task
-    let _ = app_state; // will be used as Router state once routes are wired
+    let app = Router::new()
+        .route("/api/health", get(routes::health))
+        .route("/api/sessions", get(routes::list_sessions))
+        .route("/api/sessions/{id}", get(routes::get_session))
+        .route("/api/sessions/{id}/handoff", post(routes::create_handoff))
+        .route("/api/handoffs", get(routes::list_handoffs))
+        .route("/api/handoffs/{id}", get(routes::get_handoff))
+        .route("/api/config", get(routes::get_config))
+        .layer(CorsLayer::permissive())
+        .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     println!("relay API listening on http://{bind}");

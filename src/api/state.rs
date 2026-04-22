@@ -155,6 +155,10 @@ impl AppState {
         self.inner.read().await.handoffs.clone()
     }
 
+    pub async fn config(&self) -> Config {
+        self.inner.read().await.config.clone()
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.event_tx.subscribe()
     }
