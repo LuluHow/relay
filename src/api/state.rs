@@ -76,54 +76,59 @@ impl AppState {
 
     /// Refresh sessions and handoffs by calling sync code in spawn_blocking.
     pub async fn refresh(&self) {
-        let result = tokio::task::spawn_blocking(|| -> anyhow::Result<(Vec<SessionSnapshot>, Vec<HandoffEntry>)> {
-            let sessions_info = session::discover_sessions().unwrap_or_default();
-            let statuses = statusline::read_all();
+        let result = tokio::task::spawn_blocking(
+            || -> anyhow::Result<(Vec<SessionSnapshot>, Vec<HandoffEntry>)> {
+                let sessions_info = session::discover_sessions().unwrap_or_default();
+                let pmap = session::ProcessMap::discover();
+                let statuses = statusline::read_all();
 
-            let snapshots: Vec<SessionSnapshot> = sessions_info
-                .iter()
-                .filter_map(|info| {
-                    let parsed = parser::parse_session(info).ok()?;
-                    let status = statuses.get(&info.session_id);
+                let snapshots: Vec<SessionSnapshot> = sessions_info
+                    .iter()
+                    .filter_map(|info| {
+                        let parsed = parser::parse_session(info).ok()?;
+                        let status = statuses.get(&info.session_id);
 
-                    let context_pct = status
-                        .and_then(|s| s.context_used_pct)
-                        .unwrap_or(0.0);
+                        let context_pct = status.and_then(|s| s.context_used_pct).unwrap_or(0.0);
 
-                    let cost_usd = status.map(|s| s.cost_usd).unwrap_or(0.0);
+                        let cost_usd = status.map(|s| s.cost_usd).unwrap_or(0.0);
 
-                    let state = session::classify_state(
-                        parsed.age_secs,
-                        false, // cannot cheaply detect dead processes here
-                    );
-                    let state_str = match state {
-                        session::SessionState::Starting => "starting",
-                        session::SessionState::Working => "working",
-                        session::SessionState::Waiting => "waiting",
-                        session::SessionState::Ended => "ended",
-                        session::SessionState::Idle => "idle",
-                    }
-                    .to_string();
+                        let process_dead = if parsed.age_secs < 300 {
+                            !pmap.is_session_alive(&info.jsonl_path)
+                        } else {
+                            false
+                        };
+                        let cpu_active = pmap.is_cpu_active(&info.jsonl_path);
+                        let state =
+                            session::classify_state(parsed.age_secs, process_dead, cpu_active);
+                        let state_str = match state {
+                            session::SessionState::Starting => "starting",
+                            session::SessionState::Working => "working",
+                            session::SessionState::Waiting => "waiting",
+                            session::SessionState::Ended => "ended",
+                            session::SessionState::Idle => "idle",
+                        }
+                        .to_string();
 
-                    Some(SessionSnapshot {
-                        session_id: info.session_id.clone(),
-                        project_name: info.project_name.clone(),
-                        model: parsed.model.clone(),
-                        git_branch: parsed.git_branch.clone(),
-                        state: state_str,
-                        turn_count: parsed.turn_count,
-                        context_pct,
-                        cost_usd,
-                        age_secs: parsed.age_secs,
-                        files_touched: parsed.files_touched.len(),
+                        Some(SessionSnapshot {
+                            session_id: info.session_id.clone(),
+                            project_name: info.project_name.clone(),
+                            model: parsed.model.clone(),
+                            git_branch: parsed.git_branch.clone(),
+                            state: state_str,
+                            turn_count: parsed.turn_count,
+                            context_pct,
+                            cost_usd,
+                            age_secs: parsed.age_secs,
+                            files_touched: parsed.files_touched.len(),
+                        })
                     })
-                })
-                .collect();
+                    .collect();
 
-            let handoffs = collect_handoffs().unwrap_or_default();
+                let handoffs = collect_handoffs().unwrap_or_default();
 
-            Ok((snapshots, handoffs))
-        })
+                Ok((snapshots, handoffs))
+            },
+        )
         .await;
 
         match result {

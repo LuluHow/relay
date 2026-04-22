@@ -9,11 +9,7 @@ use subtle::ConstantTimeEq;
 
 use crate::api::state::AppState;
 
-pub async fn auth_middleware(
-    State(state): State<AppState>,
-    req: Request,
-    next: Next,
-) -> Response {
+pub async fn auth_middleware(State(state): State<AppState>, req: Request, next: Next) -> Response {
     // Always pass through CORS preflight requests
     if req.method() == Method::OPTIONS {
         return next.run(req).await;

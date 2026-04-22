@@ -33,7 +33,12 @@ async fn json_body(body: Body) -> serde_json::Value {
 #[tokio::test]
 async fn test_health_endpoint() {
     let response = app_no_auth()
-        .oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -50,7 +55,12 @@ async fn test_health_endpoint() {
 #[tokio::test]
 async fn test_sessions_empty() {
     let response = app_no_auth()
-        .oneshot(Request::builder().uri("/api/sessions").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -83,7 +93,12 @@ async fn test_session_not_found() {
 #[tokio::test]
 async fn test_handoffs_empty() {
     let response = app_no_auth()
-        .oneshot(Request::builder().uri("/api/handoffs").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/handoffs")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -117,7 +132,12 @@ async fn test_handoff_not_found() {
 #[tokio::test]
 async fn test_config_endpoint() {
     let response = app_no_auth()
-        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -155,7 +175,12 @@ async fn test_config_redacts_token() {
 async fn test_auth_required() {
     let app = app_with_token("secret");
     let response = app
-        .oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -216,7 +241,10 @@ async fn test_static_index() {
         .expect("content-type header missing")
         .to_str()
         .unwrap();
-    assert!(content_type.contains("text/html"), "expected text/html, got {content_type}");
+    assert!(
+        content_type.contains("text/html"),
+        "expected text/html, got {content_type}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -238,7 +266,9 @@ async fn test_cors_headers() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
-        response.headers().contains_key("access-control-allow-origin"),
+        response
+            .headers()
+            .contains_key("access-control-allow-origin"),
         "CORS header missing"
     );
 }

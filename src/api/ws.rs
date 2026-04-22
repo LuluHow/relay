@@ -1,8 +1,8 @@
+use axum::extract::ws::WebSocket;
 use axum::{
     extract::{ws::Message, State, WebSocketUpgrade},
     response::IntoResponse,
 };
-use axum::extract::ws::WebSocket;
 use serde::Serialize;
 use tokio::sync::broadcast::error::RecvError;
 
@@ -66,9 +66,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             Err(RecvError::Lagged(_)) => {
                 let sessions = state.sessions().await;
                 let handoffs = state.handoffs().await;
-                if let Ok(json) =
-                    serde_json::to_string(&WsMessage::Resync { sessions, handoffs })
-                {
+                if let Ok(json) = serde_json::to_string(&WsMessage::Resync { sessions, handoffs }) {
                     if socket.send(Message::Text(json.into())).await.is_err() {
                         return;
                     }

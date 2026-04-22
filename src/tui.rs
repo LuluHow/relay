@@ -93,6 +93,8 @@ struct App {
     statuses: HashMap<String, SessionStatus>,
     // Process liveness cache: session IDs confirmed dead
     dead_sessions: HashSet<String>,
+    // Process snapshot (rebuilt each refresh tick)
+    pmap: session::ProcessMap,
     // Pending restart: fallback spawn if wrapper doesn't pick up next_prompt
     pending_restart: Option<PendingRestart>,
 }
@@ -126,6 +128,7 @@ impl App {
             pending_handoffs: HashSet::new(),
             statuses: HashMap::new(),
             dead_sessions: HashSet::new(),
+            pmap: session::ProcessMap::discover(),
             pending_restart: None,
         };
         app.refresh();
@@ -149,8 +152,9 @@ impl App {
             self.config = new_config;
         }
 
-        // Discover running Claude processes (single lsof call)
-        let claude_pids = session::discover_claude_pids();
+        // Single snapshot of all process data (ps + lsof/proc, once per tick)
+        let pmap = session::ProcessMap::discover();
+        self.pmap = pmap.clone();
 
         if let Ok(sessions) = session::discover_sessions() {
             self.sessions = sessions
@@ -161,7 +165,7 @@ impl App {
             // Detect processes with no JSONL yet (starting sessions)
             let existing_infos: Vec<_> =
                 self.sessions.iter().map(|(info, _)| info.clone()).collect();
-            for starting in session::discover_starting_sessions(&existing_infos, &claude_pids) {
+            for starting in session::discover_starting_sessions(&existing_infos, &pmap) {
                 let empty_parsed = parser::empty_parsed(&starting);
                 self.sessions.push((starting, empty_parsed));
             }
@@ -178,7 +182,7 @@ impl App {
                 if !info.session_id.starts_with("starting-")
                     && parsed.age_secs < 300
                     && !self.dead_sessions.contains(&info.session_id)
-                    && !session::is_session_alive(&info.jsonl_path, &claude_pids)
+                    && !pmap.is_session_alive(&info.jsonl_path)
                 {
                     self.dead_sessions.insert(info.session_id.clone());
                 }
@@ -190,7 +194,8 @@ impl App {
                     return session::SessionState::Starting.sort_key();
                 }
                 let process_dead = dead.contains(&info.session_id);
-                session::classify_state(p.age_secs, process_dead).sort_key()
+                let cpu_active = pmap.is_cpu_active(&info.jsonl_path);
+                session::classify_state(p.age_secs, process_dead, cpu_active).sort_key()
             });
         }
         self.handoffs = load_handoffs();
@@ -306,7 +311,8 @@ impl App {
             return session::SessionState::Starting;
         }
         let process_dead = self.dead_sessions.contains(&info.session_id);
-        session::classify_state(parsed.age_secs, process_dead)
+        let cpu_active = self.pmap.is_cpu_active(&info.jsonl_path);
+        session::classify_state(parsed.age_secs, process_dead, cpu_active)
     }
 
     fn check_auto_handoff(&mut self) {
@@ -622,9 +628,9 @@ fn context_pct(parsed: &ParsedSession) -> u8 {
 
 /// Find the Claude Code process that owns a session JSONL file.
 fn find_claude_pid(jsonl_path: &std::path::Path) -> Option<u32> {
-    // Try cwd-based matching via lsof
-    let claude_pids = session::discover_claude_pids();
-    if let Some(pid) = session::find_session_pid(jsonl_path, &claude_pids) {
+    // Use ProcessMap for exact FD-based matching, then cwd fallback
+    let pmap = session::ProcessMap::discover();
+    if let Some(pid) = pmap.find_session_pid(jsonl_path) {
         return Some(pid);
     }
 
@@ -1053,7 +1059,8 @@ fn render_sessions_list(f: &mut Frame, app: &mut App, area: Rect) {
             session::SessionState::Starting
         } else {
             let process_dead = dead_sessions.contains(&info.session_id);
-            session::classify_state(parsed.age_secs, process_dead)
+            let cpu_active = app.pmap.is_cpu_active(&info.jsonl_path);
+            session::classify_state(parsed.age_secs, process_dead, cpu_active)
         };
         let (dot, dot_color) = match state {
             session::SessionState::Starting => ("◌", CYAN),

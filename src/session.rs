@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
@@ -12,8 +13,8 @@ use crate::util;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
     Starting, // process alive, no JSONL data yet
-    Working,  // age < 30s, process alive
-    Waiting,  // age < 300s, process alive
+    Working,  // age < 30s OR cpu active, process alive
+    Waiting,  // age < 300s, process alive, not cpu active
     Ended,    // age < 300s, process NOT alive
     Idle,     // age >= 300s
 }
@@ -37,74 +38,222 @@ impl SessionState {
     }
 }
 
-/// Classify session state from age and process liveness.
-pub fn classify_state(age_secs: u64, process_dead: bool) -> SessionState {
+/// Classify session state from age, process liveness, and CPU activity.
+///
+/// `cpu_active` upgrades Waiting → Working when the process (or a descendant)
+/// is consuming CPU despite no recent JSONL writes.
+pub fn classify_state(age_secs: u64, process_dead: bool, cpu_active: bool) -> SessionState {
     if age_secs >= 300 {
         SessionState::Idle
     } else if process_dead {
         SessionState::Ended
-    } else if age_secs < 30 {
+    } else if age_secs < 30 || cpu_active {
         SessionState::Working
     } else {
         SessionState::Waiting
     }
 }
 
-// ── Process detection ───────────────────────────────────────────────────────
+// ── Process map ─────────────────────────────────────────────────────────────
 
-use std::collections::HashMap;
+/// Aggregated process data for robust Claude session detection.
+///
+/// Collects process info, CPU usage, child trees, and open file descriptors
+/// in a single snapshot. Designed to be built once per refresh tick and
+/// queried multiple times.
+#[derive(Debug, Clone)]
+pub struct ProcessMap {
+    /// Encoded project dir name → list of PIDs
+    pub by_project: HashMap<String, Vec<u32>>,
+    /// Specific JSONL path → PID (from open FD matching)
+    by_jsonl: HashMap<PathBuf, u32>,
+    /// PID → CPU percentage
+    cpu: HashMap<u32, f32>,
+    /// PID → list of direct child PIDs
+    children: HashMap<u32, Vec<u32>>,
+}
 
-/// Discover running Claude processes.
-/// Uses `lsof` on macOS, falls back to `/proc` on Linux.
-/// Returns a map of encoded project directory name → list of PIDs.
-/// The key matches the directory names under `~/.claude/projects/`.
-pub fn discover_claude_pids() -> HashMap<String, Vec<u32>> {
-    // Try /proc first (Linux), fall back to lsof (macOS/BSD)
-    if Path::new("/proc").exists() {
-        discover_claude_pids_proc()
-    } else {
-        discover_claude_pids_lsof()
+impl ProcessMap {
+    /// Build a process map by discovering all running Claude processes.
+    ///
+    /// Performs a single `ps` call to enumerate processes and build the child
+    /// tree, then uses platform-specific methods to discover cwds and open
+    /// JSONL files.
+    pub fn discover() -> Self {
+        let (all_procs, claude_pids) = enumerate_processes();
+
+        // Build children map from ALL processes (needed for descendant CPU check)
+        let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
+        for proc in &all_procs {
+            if proc.ppid > 0 {
+                children.entry(proc.ppid).or_default().push(proc.pid);
+            }
+        }
+
+        // Build CPU map for Claude PIDs + all their descendants
+        let mut cpu: HashMap<u32, f32> = HashMap::new();
+        for proc in &all_procs {
+            cpu.insert(proc.pid, proc.cpu_pct);
+        }
+
+        // Discover cwds for Claude processes → project mapping
+        let by_project = discover_claude_cwds(&claude_pids);
+
+        // Discover open JSONL files for exact session matching
+        let by_jsonl = discover_open_jsonls(&claude_pids);
+
+        ProcessMap {
+            by_project,
+            by_jsonl,
+            cpu,
+            children,
+        }
+    }
+
+    /// Check if a session's JSONL file has a running Claude process.
+    ///
+    /// Prefers exact FD-based matching; falls back to project-level matching.
+    pub fn is_session_alive(&self, jsonl_path: &Path) -> bool {
+        if self.by_jsonl.contains_key(jsonl_path) {
+            return true;
+        }
+        project_dir_name(jsonl_path)
+            .map(|name| self.by_project.contains_key(&name))
+            .unwrap_or(false)
+    }
+
+    /// Find the PID that owns a session JSONL file.
+    pub fn find_session_pid(&self, jsonl_path: &Path) -> Option<u32> {
+        if let Some(&pid) = self.by_jsonl.get(jsonl_path) {
+            return Some(pid);
+        }
+        project_dir_name(jsonl_path)
+            .and_then(|name| self.by_project.get(&name))
+            .and_then(|pids| pids.first().copied())
+    }
+
+    /// Check if a session's process (or any descendant) is consuming CPU.
+    ///
+    /// Returns true if the main process CPU > 1% or any descendant CPU > 5%.
+    /// Thresholds follow abtop's heuristic to avoid false positives from idle
+    /// watcher processes.
+    pub fn is_cpu_active(&self, jsonl_path: &Path) -> bool {
+        let Some(pid) = self.find_session_pid(jsonl_path) else {
+            return false;
+        };
+        if self.cpu.get(&pid).copied().unwrap_or(0.0) > 1.0 {
+            return true;
+        }
+        self.has_active_descendant(pid, 5.0)
+    }
+
+    /// Iterative DFS through the process tree to find any descendant above the
+    /// CPU threshold.
+    fn has_active_descendant(&self, pid: u32, threshold: f32) -> bool {
+        let mut stack: Vec<u32> = self.children.get(&pid).cloned().unwrap_or_default();
+        while let Some(cpid) = stack.pop() {
+            if self.cpu.get(&cpid).copied().unwrap_or(0.0) > threshold {
+                return true;
+            }
+            if let Some(grandchildren) = self.children.get(&cpid) {
+                stack.extend(grandchildren);
+            }
+        }
+        false
     }
 }
 
-/// Linux: scan /proc/*/cmdline for "claude" and read /proc/*/cwd symlink
-fn discover_claude_pids_proc() -> HashMap<String, Vec<u32>> {
-    let mut map: HashMap<String, Vec<u32>> = HashMap::new();
+// ── Process enumeration (single ps call) ────────────────────────────────────
 
-    let Ok(entries) = std::fs::read_dir("/proc") else {
-        return map;
+struct ProcEntry {
+    pid: u32,
+    ppid: u32,
+    cpu_pct: f32,
+}
+
+/// Enumerate all system processes in a single `ps` call.
+/// Returns (all processes, filtered Claude PIDs).
+fn enumerate_processes() -> (Vec<ProcEntry>, Vec<u32>) {
+    let output = match Command::new("ps")
+        .args(["-ww", "-eo", "pid,ppid,%cpu,comm"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return (Vec::new(), Vec::new()),
     };
 
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        let Ok(pid) = name_str.parse::<u32>() else {
-            continue;
-        };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut all = Vec::new();
+    let mut claude_pids = Vec::new();
 
-        // Check if this is a claude process
-        let cmdline_path = format!("/proc/{pid}/cmdline");
-        let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) else {
-            continue;
-        };
-        if !cmdline.contains("claude") {
+    for line in text.lines().skip(1) {
+        // skip header
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 4 {
             continue;
         }
+        let Some(pid) = parts[0].parse::<u32>().ok() else {
+            continue;
+        };
+        let ppid = parts[1].parse::<u32>().unwrap_or(0);
+        let cpu_pct = parts[2].parse::<f32>().unwrap_or(0.0);
+        // comm may contain spaces if path; we need the last segment (binary name)
+        let comm = parts[3..].join(" ");
+        let binary_name = comm.rsplit('/').next().unwrap_or(&comm);
 
-        // Read cwd symlink
+        let is_claude = binary_name == "claude";
+
+        all.push(ProcEntry { pid, ppid, cpu_pct });
+
+        if is_claude {
+            // Exclude `claude --print` and similar non-interactive invocations
+            if !comm.contains("--print") {
+                claude_pids.push(pid);
+            }
+        }
+    }
+
+    (all, claude_pids)
+}
+
+/// Discover cwds of Claude processes and return encoded project dir → PIDs.
+fn discover_claude_cwds(claude_pids: &[u32]) -> HashMap<String, Vec<u32>> {
+    if claude_pids.is_empty() {
+        return HashMap::new();
+    }
+
+    if Path::new("/proc").exists() {
+        discover_cwds_proc(claude_pids)
+    } else {
+        discover_cwds_lsof(claude_pids)
+    }
+}
+
+/// Linux: read /proc/{pid}/cwd symlink
+fn discover_cwds_proc(pids: &[u32]) -> HashMap<String, Vec<u32>> {
+    let mut map: HashMap<String, Vec<u32>> = HashMap::new();
+    for &pid in pids {
         let cwd_path = format!("/proc/{pid}/cwd");
         if let Ok(cwd) = std::fs::read_link(&cwd_path) {
-            let encoded = cwd.to_string_lossy().replace('/', "-");
+            let encoded = encode_path(&cwd);
             map.entry(encoded).or_default().push(pid);
         }
     }
     map
 }
 
-/// macOS/BSD: use `lsof -c claude -a -d cwd -Fn`
-fn discover_claude_pids_lsof() -> HashMap<String, Vec<u32>> {
+/// macOS/BSD: use lsof to read cwds for specific PIDs
+fn discover_cwds_lsof(pids: &[u32]) -> HashMap<String, Vec<u32>> {
+    let pid_list: String = pids
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
     let output = match Command::new("lsof")
-        .args(["-c", "claude", "-a", "-d", "cwd", "-Fn"])
+        .args(["-p", &pid_list, "-a", "-d", "cwd", "-Fn"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .output()
@@ -122,7 +271,7 @@ fn discover_claude_pids_lsof() -> HashMap<String, Vec<u32>> {
             current_pid = rest.parse().ok();
         } else if let Some(rest) = line.strip_prefix('n') {
             if let Some(pid) = current_pid {
-                let encoded = rest.replace('/', "-");
+                let encoded = encode_path(Path::new(rest));
                 map.entry(encoded).or_default().push(pid);
             }
         }
@@ -130,18 +279,135 @@ fn discover_claude_pids_lsof() -> HashMap<String, Vec<u32>> {
     map
 }
 
-/// Check if a session's project has a running Claude process.
-pub fn is_session_alive(jsonl_path: &Path, claude_pids: &HashMap<String, Vec<u32>>) -> bool {
-    project_dir_name(jsonl_path)
-        .map(|name| claude_pids.contains_key(&name))
-        .unwrap_or(false)
+/// Discover which JSONL files are open by which Claude PIDs.
+fn discover_open_jsonls(claude_pids: &[u32]) -> HashMap<PathBuf, u32> {
+    if claude_pids.is_empty() {
+        return HashMap::new();
+    }
+
+    if Path::new("/proc").exists() {
+        discover_jsonls_proc(claude_pids)
+    } else {
+        discover_jsonls_lsof(claude_pids)
+    }
 }
 
-/// Find a Claude PID for a session's project (for killing).
-pub fn find_session_pid(jsonl_path: &Path, claude_pids: &HashMap<String, Vec<u32>>) -> Option<u32> {
-    project_dir_name(jsonl_path)
-        .and_then(|name| claude_pids.get(&name))
-        .and_then(|pids| pids.first().copied())
+/// Linux: read /proc/{pid}/fd symlinks and filter for .jsonl under ~/.claude/projects
+fn discover_jsonls_proc(pids: &[u32]) -> HashMap<PathBuf, u32> {
+    let claude_projects = dirs::home_dir()
+        .map(|h| h.join(".claude").join("projects"))
+        .unwrap_or_default();
+    let prefix = claude_projects.to_string_lossy().to_string();
+
+    let mut map = HashMap::new();
+    for &pid in pids {
+        let fd_dir = format!("/proc/{pid}/fd");
+        let Ok(entries) = std::fs::read_dir(&fd_dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if let Ok(target) = std::fs::read_link(entry.path()) {
+                let target_str = target.to_string_lossy();
+                if target_str.starts_with(&prefix) && target_str.ends_with(".jsonl") {
+                    map.insert(target, pid);
+                }
+            }
+        }
+    }
+    map
+}
+
+/// macOS: use lsof to find open .jsonl files for specific PIDs
+fn discover_jsonls_lsof(pids: &[u32]) -> HashMap<PathBuf, u32> {
+    let claude_projects = dirs::home_dir()
+        .map(|h| h.join(".claude").join("projects"))
+        .unwrap_or_default();
+    let prefix = claude_projects.to_string_lossy().to_string();
+
+    let pid_list: String = pids
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let output = match Command::new("lsof")
+        .args(["-p", &pid_list, "-Fn"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return HashMap::new(),
+    };
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut map = HashMap::new();
+    let mut current_pid: Option<u32> = None;
+
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix('p') {
+            current_pid = rest.parse().ok();
+        } else if let Some(rest) = line.strip_prefix('n') {
+            if let Some(pid) = current_pid {
+                if rest.starts_with(&prefix) && rest.ends_with(".jsonl") {
+                    map.insert(PathBuf::from(rest), pid);
+                }
+            }
+        }
+    }
+    map
+}
+
+// ── Path encoding / decoding ────────────────────────────────────────────────
+
+/// Encode a filesystem path to the format used by ~/.claude/projects/.
+/// `/Users/foo/bar` → `-Users-foo-bar`
+fn encode_path(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "-")
+}
+
+/// Decode an encoded project directory name back to a real path.
+///
+/// Uses greedy filesystem resolution: tries the longest possible segment
+/// at each step, matching against directories that actually exist on disk.
+/// This correctly handles hyphens in directory names (e.g.
+/// `-Users-foo-my-project` → `/Users/foo/my-project` not `/Users/foo/my/project`).
+pub fn decode_project_path(encoded: &str) -> (String, String) {
+    let parts: Vec<&str> = encoded.split('-').filter(|s| !s.is_empty()).collect();
+    if parts.is_empty() {
+        return (encoded.to_string(), encoded.to_string());
+    }
+
+    let mut path = PathBuf::from("/");
+    let mut i = 0;
+
+    while i < parts.len() {
+        // Try longest possible segment first (greedy)
+        let mut matched = false;
+        for end in (i + 1..=parts.len()).rev() {
+            let segment = parts[i..end].join("-");
+            let candidate = path.join(&segment);
+            if candidate.exists() {
+                path = candidate;
+                i = end;
+                matched = true;
+                break;
+            }
+        }
+        if !matched {
+            // No match on disk — use single part as fallback
+            path.push(parts[i]);
+            i += 1;
+        }
+    }
+
+    let project_path = path.to_string_lossy().to_string();
+    let project_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| project_path.clone());
+
+    (project_path, project_name)
 }
 
 fn project_dir_name(jsonl_path: &Path) -> Option<String> {
@@ -187,13 +453,7 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
         }
 
         let project_encoded = project_entry.file_name().to_string_lossy().to_string();
-        // Decode: -Users-foo-bar -> /Users/foo/bar
-        let project_path = project_encoded.replace('-', "/");
-        let project_name = project_path
-            .rsplit('/')
-            .next()
-            .unwrap_or(&project_path)
-            .to_string();
+        let (project_path, project_name) = decode_project_path(&project_encoded);
 
         for file_entry in std::fs::read_dir(&project_dir)? {
             let file_entry = file_entry?;
@@ -231,10 +491,7 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
 /// Discover running Claude processes that don't have a matching active session yet.
 /// Compares PID count per project with recently-active session count.
 /// Returns synthetic SessionInfo entries for the excess (starting) processes.
-pub fn discover_starting_sessions(
-    existing: &[SessionInfo],
-    claude_pids: &HashMap<String, Vec<u32>>,
-) -> Vec<SessionInfo> {
+pub fn discover_starting_sessions(existing: &[SessionInfo], pmap: &ProcessMap) -> Vec<SessionInfo> {
     let now = SystemTime::now();
 
     // Count recently-active sessions per project directory
@@ -258,7 +515,7 @@ pub fn discover_starting_sessions(
     };
 
     let mut result = Vec::new();
-    for project_encoded in claude_pids.keys() {
+    for project_encoded in pmap.by_project.keys() {
         // Process running but no active session → one starting entry
         if active_per_project
             .get(project_encoded)
@@ -269,17 +526,11 @@ pub fn discover_starting_sessions(
             continue;
         }
 
-        // Decode: -Users-foo-bar -> /Users/foo/bar (same as discover_sessions)
-        let project_path = project_encoded.replace('-', "/");
-        let project_name = project_path
-            .rsplit('/')
-            .next()
-            .unwrap_or(&project_path)
-            .to_string();
+        let (project_path, project_name) = decode_project_path(project_encoded);
 
         result.push(SessionInfo {
             session_id: format!("starting-{project_encoded}"),
-            project_path: project_path.clone(),
+            project_path,
             project_name,
             jsonl_path: claude_dir.join(project_encoded).join("_starting.jsonl"),
             modified: SystemTime::now(),
@@ -328,7 +579,7 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
 
     let now = SystemTime::now();
     let limit = 10.min(sessions.len());
-    let claude_pids = discover_claude_pids();
+    let pmap = ProcessMap::discover();
 
     println!(
         "{}",
@@ -355,11 +606,12 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
         };
 
         let process_dead = if parsed.age_secs < 300 {
-            !is_session_alive(&s.jsonl_path, &claude_pids)
+            !pmap.is_session_alive(&s.jsonl_path)
         } else {
             false
         };
-        let state = classify_state(parsed.age_secs, process_dead);
+        let cpu_active = pmap.is_cpu_active(&s.jsonl_path);
+        let state = classify_state(parsed.age_secs, process_dead, cpu_active);
         let status = match state {
             SessionState::Starting => "starting".cyan(),
             SessionState::Working => "working".green(),

@@ -92,31 +92,29 @@ pub async fn list_sessions(
     Json(sessions)
 }
 
-pub async fn get_session(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+pub async fn get_session(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let sessions = state.sessions().await;
     match sessions.into_iter().find(|s| s.session_id == id) {
         Some(s) => Json(s).into_response(),
         None => (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: "session not found" }),
+            Json(ErrorResponse {
+                error: "session not found",
+            }),
         )
             .into_response(),
     }
 }
 
-pub async fn create_handoff(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+pub async fn create_handoff(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     // Fast 404: check cached sessions before paying for a disk scan
     let sessions = state.sessions().await;
     if !sessions.iter().any(|s| s.session_id == id) {
         return (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: "session not found" }),
+            Json(ErrorResponse {
+                error: "session not found",
+            }),
         )
             .into_response();
     }
@@ -144,7 +142,9 @@ pub async fn create_handoff(
         }
         Ok(Ok(None)) => (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: "session not found" }),
+            Json(ErrorResponse {
+                error: "session not found",
+            }),
         )
             .into_response(),
         Ok(Err(e)) => (
@@ -156,7 +156,9 @@ pub async fn create_handoff(
             .into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse { error: "internal error" }),
+            Json(ErrorResponse {
+                error: "internal error",
+            }),
         )
             .into_response(),
     }
@@ -172,7 +174,9 @@ pub async fn get_handoff(Path(id): Path<String>) -> Response {
         None => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse { error: "no home directory" }),
+                Json(ErrorResponse {
+                    error: "no home directory",
+                }),
             )
                 .into_response()
         }
@@ -189,7 +193,9 @@ pub async fn get_handoff(Path(id): Path<String>) -> Response {
             .into_response(),
         Err(_) => (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: "handoff not found" }),
+            Json(ErrorResponse {
+                error: "handoff not found",
+            }),
         )
             .into_response(),
     }
