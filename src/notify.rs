@@ -44,7 +44,19 @@ pub fn test(config: &Config) -> Vec<(&'static str, Result<(), String>)> {
     results
 }
 
+fn is_valid_webhook_url(url: &str) -> bool {
+    url.starts_with("https://discord.com/api/webhooks/")
+        || url.starts_with("https://discordapp.com/api/webhooks/")
+        || url.starts_with("https://hooks.slack.com/services/")
+}
+
 fn send_discord(webhook_url: &str, message: &str) -> Result<(), Box<ureq::Error>> {
+    if !is_valid_webhook_url(webhook_url) {
+        return Err(Box::new(ureq::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid Discord webhook URL",
+        ))));
+    }
     ureq::post(webhook_url)
         .set("Content-Type", "application/json")
         .send_json(serde_json::json!({
@@ -54,6 +66,12 @@ fn send_discord(webhook_url: &str, message: &str) -> Result<(), Box<ureq::Error>
 }
 
 fn send_slack(webhook_url: &str, message: &str) -> Result<(), Box<ureq::Error>> {
+    if !is_valid_webhook_url(webhook_url) {
+        return Err(Box::new(ureq::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid Slack webhook URL",
+        ))));
+    }
     ureq::post(webhook_url)
         .set("Content-Type", "application/json")
         .send_json(serde_json::json!({

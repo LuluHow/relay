@@ -2,6 +2,7 @@ use std::process::{Command, Stdio};
 
 use crate::parser::ParsedSession;
 use crate::statusline::SessionStatus;
+use crate::util;
 
 /// Check if a directory is inside a git work tree (via rev-parse).
 pub fn is_git_repo(cwd: &str) -> bool {
@@ -27,8 +28,26 @@ pub fn has_uncommitted_changes(cwd: &str) -> bool {
     }
 }
 
+/// Check if the repo is in detached HEAD state.
+fn is_detached_head(cwd: &str) -> bool {
+    let output = Command::new("git")
+        .args(["-C", cwd, "symbolic-ref", "HEAD"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match output {
+        Ok(s) => !s.success(),
+        Err(_) => false,
+    }
+}
+
 /// Stage all changes and commit. Returns the short commit hash on success.
 pub fn auto_commit(cwd: &str, message: &str) -> Result<String, String> {
+    // Refuse to commit in detached HEAD state (commits would be orphaned)
+    if is_detached_head(cwd) {
+        return Err("skipped: detached HEAD (commit would be orphaned)".to_string());
+    }
+
     // Pull remote changes first (best-effort)
     if let Ok(output) = Command::new("git")
         .args(["-C", cwd, "pull", "--rebase", "--autostash", "-q"])
@@ -94,7 +113,7 @@ pub fn generate_commit_message(
     reason: &str,
     prefix: &str,
 ) -> String {
-    let window = context_window(&parsed.model, parsed.current_context_tokens);
+    let window = util::context_window(&parsed.model, parsed.current_context_tokens);
     let pct = if window > 0 {
         (parsed.current_context_tokens as f64 / window as f64 * 100.0) as u8
     } else {
@@ -239,13 +258,4 @@ fn summarize_changes(files: &[ChangedFile]) -> String {
     }
 
     format!("update {} files", files.len())
-}
-
-fn context_window(model: &str, observed: u64) -> u64 {
-    let m = model.to_lowercase();
-    if m.contains("[1m]") || m.contains("opus") || observed > 180_000 {
-        1_000_000
-    } else {
-        200_000
-    }
 }

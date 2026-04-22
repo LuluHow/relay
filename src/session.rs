@@ -5,16 +5,7 @@ use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
 use crate::parser;
-
-/// Infer context window size from model slug and observed token usage
-fn context_window(model: &str, observed_tokens: u64) -> u64 {
-    let m = model.to_lowercase();
-    if m.contains("[1m]") || m.contains("opus") || observed_tokens > 180_000 {
-        1_000_000
-    } else {
-        200_000
-    }
-}
+use crate::util;
 
 // ── Session state classification ────────────────────────────────────────────
 
@@ -288,10 +279,10 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
 
         let age = now
             .duration_since(s.modified)
-            .map(|d| format_duration(d.as_secs()))
+            .map(|d| util::format_duration(d.as_secs()))
             .unwrap_or_else(|_| "?".into());
 
-        let window = context_window(&parsed.model, parsed.current_context_tokens);
+        let window = util::context_window(&parsed.model, parsed.current_context_tokens);
         let pct = if window > 0 {
             (parsed.current_context_tokens as f64 / window as f64 * 100.0) as u8
         } else {
@@ -330,7 +321,7 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
             context_colored,
             parsed.turn_count,
             age,
-            &s.session_id[..8],
+            util::short_session_id(&s.session_id),
         );
     }
 
@@ -339,16 +330,4 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn format_duration(secs: u64) -> String {
-    if secs < 60 {
-        format!("{secs}s")
-    } else if secs < 3600 {
-        format!("{}m", secs / 60)
-    } else if secs < 86400 {
-        format!("{}h", secs / 3600)
-    } else {
-        format!("{}d", secs / 86400)
-    }
 }

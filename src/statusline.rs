@@ -3,18 +3,12 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use crate::util;
+
 // ── Data written by the hook, one file per session ─────────────────────────
 
 fn sessions_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".relay").join("sessions"))
-}
-
-fn claude_settings_path() -> Option<PathBuf> {
-    let dir = std::env::var("CLAUDE_CONFIG_DIR")
-        .ok()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".claude"));
-    Some(dir.join("settings.json"))
 }
 
 fn hook_script_path() -> Option<PathBuf> {
@@ -31,12 +25,22 @@ fn hook_script(chain_cmd: Option<&str>) -> String {
         .unwrap_or_else(|| "$HOME/.relay/sessions".to_string());
 
     let chain_block = if let Some(cmd) = chain_cmd {
-        format!(
-            r#"
+        // Validate: only allow commands that look like a file path or simple command
+        // Reject anything with shell metacharacters that could enable injection
+        let is_safe = cmd
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.' | ' ' | '~'));
+        if is_safe {
+            format!(
+                r#"
 # Chain: forward to original statusLine command
 printf '%s' "$INPUT" | {cmd}
 "#
-        )
+            )
+        } else {
+            // Unsafe command — skip chaining to prevent injection
+            String::new()
+        }
     } else {
         String::new()
     };
@@ -153,11 +157,11 @@ pub fn ensure_hook() -> bool {
     let Some(script_path) = hook_script_path() else {
         return false;
     };
-    let Some(settings_path) = claude_settings_path() else {
+    let Some(settings_path) = util::claude_settings_path() else {
         return false;
     };
 
-    // Read existing settings
+    // Read existing settings (with file lock)
     let mut settings: serde_json::Value = if settings_path.exists() {
         std::fs::read_to_string(&settings_path)
             .ok()
@@ -203,7 +207,7 @@ pub fn ensure_hook() -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
+        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o700));
     }
 
     // Point statusLine to our script
@@ -218,7 +222,7 @@ pub fn ensure_hook() -> bool {
     }
 
     if let Ok(json) = serde_json::to_string_pretty(&settings) {
-        let _ = std::fs::write(&settings_path, json);
+        let _ = util::write_atomic(&settings_path, json.as_bytes());
     }
 
     true

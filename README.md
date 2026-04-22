@@ -12,6 +12,7 @@ When Claude Code approaches its context limit, relay saves the session state as 
 - **Git auto-commit** — commits work before handoff so nothing is lost
 - **Hook integration** — installs Claude Code hooks (Stop, statusLine) automatically
 - **Shell wrapper** — transparent `claude` wrapper that handles restart loops
+- **Discord / Slack notifications** — webhook alerts on every handoff
 
 ## Install
 
@@ -66,6 +67,7 @@ relay list         # List saved handoffs
 relay restore <id> # Print handoff to stdout
 relay init         # Create config + shell wrapper
 relay test-notify  # Test Discord/Slack webhook notifications
+relay uninstall    # Remove all traces of relay
 relay --version    # Show version
 ```
 
@@ -75,8 +77,13 @@ relay --version    # Show version
 |-----|--------|
 | `j/k` or `↑/↓` | Navigate sessions |
 | `Tab` | Switch between Sessions / Handoffs tabs |
-| `Enter` | View handoff details |
-| `c` | Copy handoff to clipboard |
+| `s` | Save handoff for selected session |
+| `d` | Toggle detail/dashboard view |
+| `a` | Toggle auto-handoff |
+| `g` | Toggle git auto-commit |
+| `i` | Toggle idle sessions visibility |
+| `r` | Refresh |
+| `1/2` | Jump to Sessions/Handoffs tab |
 | `q` | Quit |
 
 ## Configuration
@@ -88,7 +95,7 @@ Config lives at `~/.relay/config.toml`:
 auto_handoff = false
 
 # Context % to trigger handoff
-threshold = 75
+threshold = 20
 
 # Max conversation turns before handoff (0 = disabled)
 max_turns = 0

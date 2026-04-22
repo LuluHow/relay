@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Context % to trigger handoff (default: 75)
+    /// Context % to trigger handoff (default: 20)
     pub threshold: u8,
     /// Max turns before handoff, 0 = disabled (default: 0)
     pub max_turns: u32,
@@ -35,7 +35,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            threshold: 75,
+            threshold: 20,
             max_turns: 0,
             interval: 10,
             cooldown: 5,
@@ -61,7 +61,7 @@ const DEFAULT_CONFIG: &str = "\
 auto_handoff = false
 
 # Context % used to trigger handoff
-threshold = 75
+threshold = 20
 
 # Max conversation turns before handoff (0 = disabled)
 max_turns = 0
@@ -159,15 +159,18 @@ pub fn ensure_default() -> Result<PathBuf> {
     let p = path()?;
     if let Some(dir) = p.parent() {
         std::fs::create_dir_all(dir)?;
+        crate::util::set_private_dir_permissions(dir);
     }
     if !p.exists() {
         std::fs::write(&p, DEFAULT_CONFIG)?;
+        crate::util::set_private_permissions(&p);
     }
 
     // Always (re)create the shell wrappers
-    let wrapper = p.parent().unwrap().join("claude-wrapper.sh");
+    let relay_dir = p.parent().unwrap();
+    let wrapper = relay_dir.join("claude-wrapper.sh");
     std::fs::write(&wrapper, SHELL_WRAPPER)?;
-    let fish_wrapper = p.parent().unwrap().join("claude-wrapper.fish");
+    let fish_wrapper = relay_dir.join("claude-wrapper.fish");
     std::fs::write(&fish_wrapper, FISH_WRAPPER)?;
 
     Ok(p)
@@ -240,19 +243,40 @@ pub fn uninstall() -> Result<()> {
     }
 
     // 2. Remove source line from shell rc files
-    let source_line = "source ~/.relay/claude-wrapper.sh";
-    for rc in &[".zshrc", ".bashrc"] {
-        let rc_path = home.join(rc);
+    let source_lines = [
+        "source ~/.relay/claude-wrapper.sh",
+        "source ~/.relay/claude-wrapper.fish",
+    ];
+
+    // Bash/Zsh rc files
+    let mut rc_files: Vec<PathBuf> = vec![home.join(".zshrc"), home.join(".bashrc")];
+
+    // Fish config
+    let fish_config = std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".config"))
+        .join("fish")
+        .join("config.fish");
+    rc_files.push(fish_config);
+
+    for rc_path in &rc_files {
         if rc_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&rc_path) {
-                if content.contains(source_line) {
+            if let Ok(content) = std::fs::read_to_string(rc_path) {
+                if source_lines.iter().any(|sl| content.contains(sl)) {
                     let cleaned: String = content
                         .lines()
-                        .filter(|l| !l.contains(source_line) && !l.contains("# relay"))
+                        .filter(|l| {
+                            !source_lines.iter().any(|sl| l.contains(sl)) && !l.contains("# relay")
+                        })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    let _ = std::fs::write(&rc_path, cleaned.trim_end().to_string() + "\n");
-                    println!("  {} cleaned ~/{rc}", "✓".green());
+                    let _ = std::fs::write(rc_path, cleaned.trim_end().to_string() + "\n");
+                    if let Ok(rel) = rc_path.strip_prefix(&home) {
+                        println!("  {} cleaned ~/{}", "✓".green(), rel.display());
+                    } else {
+                        println!("  {} cleaned {}", "✓".green(), rc_path.display());
+                    }
                 }
             }
         }

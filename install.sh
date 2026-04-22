@@ -100,43 +100,122 @@ build_relay() {
     ok "Installed to $INSTALL_DIR/relay"
 }
 
+# ── Shell wrappers ────────────────────────────────────────────────────────
+
+write_shell_wrappers() {
+    mkdir -p "$RELAY_DIR"
+    chmod 700 "$RELAY_DIR"
+
+    # Bash/Zsh wrapper
+    cat > "$RELAY_DIR/claude-wrapper.sh" << 'WRAPPER'
+# relay — Claude Code wrapper for auto-handoff
+# Sourced automatically by relay installer
+
+claude() {
+  command claude "$@"
+  # Reset terminal in case claude was killed mid-session
+  stty sane 2>/dev/null
+  while [ -f "$HOME/.relay/next_prompt" ]; do
+    local prompt
+    prompt="$(cat "$HOME/.relay/next_prompt")"
+    rm -f "$HOME/.relay/next_prompt"
+    [ -z "$prompt" ] && break
+    printf '\n  \033[36mrelay:\033[0m handoff detected, restarting in 5s...\n\n'
+    sleep 5
+    command claude "$prompt"
+    stty sane 2>/dev/null
+  done
+}
+WRAPPER
+
+    # Fish wrapper
+    cat > "$RELAY_DIR/claude-wrapper.fish" << 'WRAPPER'
+# relay — Claude Code wrapper for auto-handoff (fish shell)
+# Sourced automatically by relay installer
+
+function claude
+    command claude $argv
+    stty sane 2>/dev/null
+    while test -f "$HOME/.relay/next_prompt"
+        set -l prompt (cat "$HOME/.relay/next_prompt")
+        rm -f "$HOME/.relay/next_prompt"
+        test -z "$prompt"; and break
+        printf '\n  \033[36mrelay:\033[0m handoff detected, restarting in 5s...\n\n'
+        sleep 5
+        command claude "$prompt"
+        stty sane 2>/dev/null
+    end
+end
+WRAPPER
+
+    ok "Shell wrappers written to $RELAY_DIR/"
+}
+
 # ── Configure ──────────────────────────────────────────────────────────────
 
 configure() {
-    # Run relay init
+    # Write shell wrappers directly (before relay init, so they're available immediately)
+    write_shell_wrappers
+
+    # Run relay init (config, hooks, etc.)
     "$INSTALL_DIR/relay" init
 
     # Detect shell and rc file
-    local shell_name rc_file
+    local shell_name source_line
     shell_name="$(basename "${SHELL:-bash}")"
 
     case "$shell_name" in
-        zsh)  rc_file="$HOME/.zshrc" ;;
-        bash) rc_file="$HOME/.bashrc" ;;
-        *)    rc_file="" ;;
+        zsh)
+            RC_FILE="$HOME/.zshrc"
+            source_line='source ~/.relay/claude-wrapper.sh'
+            ;;
+        bash)
+            RC_FILE="$HOME/.bashrc"
+            source_line='source ~/.relay/claude-wrapper.sh'
+            ;;
+        fish)
+            RC_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"
+            source_line='source ~/.relay/claude-wrapper.fish'
+            ;;
+        *)
+            RC_FILE=""
+            source_line=""
+            ;;
     esac
 
-    # Add source line if not already present
-    if [ -n "$rc_file" ]; then
-        local source_line='source ~/.relay/claude-wrapper.sh'
-        if [ -f "$rc_file" ] && grep -qF "$source_line" "$rc_file" 2>/dev/null; then
-            ok "Shell wrapper already in $rc_file"
+    info "Detected shell: $shell_name"
+
+    # Add source line to rc file
+    if [ -n "$RC_FILE" ]; then
+        # Ensure rc file parent directory exists (for fish)
+        mkdir -p "$(dirname "$RC_FILE")"
+
+        if [ -f "$RC_FILE" ] && grep -qF "$source_line" "$RC_FILE" 2>/dev/null; then
+            ok "Shell wrapper already sourced in $RC_FILE"
         else
-            printf '\n# relay — Claude Code handoff wrapper\n%s\n' "$source_line" >> "$rc_file"
-            ok "Added shell wrapper to $rc_file"
+            printf '\n# relay — Claude Code handoff wrapper\n%s\n' "$source_line" >> "$RC_FILE"
+            ok "Added shell wrapper to $RC_FILE"
         fi
     else
-        warn "Unknown shell ($shell_name). Add this to your shell rc file manually:"
-        warn "  source ~/.relay/claude-wrapper.sh"
+        warn "Unknown shell ($shell_name). Add one of these to your shell rc file:"
+        warn "  bash/zsh: source ~/.relay/claude-wrapper.sh"
+        warn "  fish:     source ~/.relay/claude-wrapper.fish"
     fi
 
     # Ensure ~/.local/bin is in PATH
     if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
         warn "$INSTALL_DIR is not in your PATH. Add it:"
         warn "  export PATH=\"$INSTALL_DIR:\$PATH\""
-        if [ -n "$rc_file" ] && ! grep -qF "$INSTALL_DIR" "$rc_file" 2>/dev/null; then
-            printf 'export PATH="%s:$PATH"\n' "$INSTALL_DIR" >> "$rc_file"
-            ok "Added $INSTALL_DIR to PATH in $rc_file"
+        if [ -n "$RC_FILE" ] && [ "$shell_name" != "fish" ]; then
+            if ! grep -qF "$INSTALL_DIR" "$RC_FILE" 2>/dev/null; then
+                printf 'export PATH="%s:$PATH"\n' "$INSTALL_DIR" >> "$RC_FILE"
+                ok "Added $INSTALL_DIR to PATH in $RC_FILE"
+            fi
+        elif [ "$shell_name" = "fish" ]; then
+            if ! grep -qF "$INSTALL_DIR" "$RC_FILE" 2>/dev/null; then
+                printf 'fish_add_path %s\n' "$INSTALL_DIR" >> "$RC_FILE"
+                ok "Added $INSTALL_DIR to PATH in $RC_FILE"
+            fi
         fi
     fi
 }
@@ -153,7 +232,11 @@ main() {
 
     printf '\n  \033[32m✓ Installation complete!\033[0m\n\n'
     printf '  Next steps:\n'
-    printf '    1. Restart your shell (or run: source %s)\n' "${rc_file:-~/.bashrc}"
+    if [ -n "${RC_FILE:-}" ]; then
+        printf '    1. Restart your shell (or run: source %s)\n' "$RC_FILE"
+    else
+        printf '    1. Restart your shell\n'
+    fi
     printf '    2. Run \033[1mrelay\033[0m to launch the TUI\n'
     printf '    3. Edit ~/.relay/config.toml to enable auto_handoff\n\n'
 }
