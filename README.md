@@ -109,6 +109,9 @@ commit_before_handoff = true
 
 # Prefix for auto-commit messages
 commit_prefix = "relay"
+
+# Terminal bell on handoff / auto-commit
+sound = true
 ```
 
 ## Platform support
@@ -164,6 +167,14 @@ commit_prefix = "relay"
 ├── sessions/                # Live session status (from statusLine hook)
 └── handoffs/                # Saved handoff markdowns
 ```
+
+## Contributing
+
+AI-assisted contributions are welcome, but **must be disclosed** — mention it in your PR description.
+
+## Acknowledgements
+
+- [abtop](https://github.com/graykode/abtop) — inspiration for terminal-based AI monitoring
 
 ## License
 

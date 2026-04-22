@@ -24,6 +24,8 @@ pub struct Config {
     pub commit_before_handoff: bool,
     /// Prefix for auto-commit messages (default: "relay")
     pub commit_prefix: String,
+    /// Play terminal bell on handoff / auto-commit (default: true)
+    pub sound: bool,
 }
 
 impl Default for Config {
@@ -38,6 +40,7 @@ impl Default for Config {
             auto_commit: false,
             commit_before_handoff: true,
             commit_prefix: "relay".to_string(),
+            sound: true,
         }
     }
 }
@@ -74,6 +77,9 @@ commit_before_handoff = true
 
 # Prefix for auto-commit messages
 commit_prefix = \"relay\"
+
+# Play terminal bell sound on handoff / auto-commit
+sound = true
 ";
 
 const SHELL_WRAPPER: &str = r#"# relay — Claude Code wrapper for auto-handoff
