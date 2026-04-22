@@ -29,6 +29,13 @@ pub fn has_uncommitted_changes(cwd: &str) -> bool {
 
 /// Stage all changes and commit. Returns the short commit hash on success.
 pub fn auto_commit(cwd: &str, message: &str) -> Result<String, String> {
+    // Pull remote changes first (silent, best-effort)
+    let _ = Command::new("git")
+        .args(["-C", cwd, "pull", "--rebase", "--autostash", "-q"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
     // Stage all changes (respects .gitignore)
     let add = Command::new("git")
         .args(["-C", cwd, "add", "-A"])
