@@ -417,6 +417,47 @@ fn project_dir_name(jsonl_path: &Path) -> Option<String> {
         .map(|n| n.to_string_lossy().to_string())
 }
 
+/// Check if a session has recently-active subagent files.
+///
+/// When a skill or slash command runs, Claude Code writes to
+/// `{project}/{session_id}/subagents/{subagent_id}.jsonl` instead of the
+/// main session JSONL.  This function detects that activity so the parent
+/// session is not incorrectly marked as ended.
+pub fn has_active_subagents(jsonl_path: &Path, max_age_secs: u64) -> bool {
+    let session_id = match jsonl_path.file_stem() {
+        Some(s) => s.to_string_lossy().to_string(),
+        None => return false,
+    };
+    let parent = match jsonl_path.parent() {
+        Some(p) => p,
+        None => return false,
+    };
+
+    let subagents_dir = parent.join(&session_id).join("subagents");
+    let entries = match std::fs::read_dir(&subagents_dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+
+    let now = SystemTime::now();
+    for entry in entries.flatten() {
+        if entry.path().extension().is_some_and(|e| e == "jsonl") {
+            if let Ok(meta) = entry.metadata() {
+                if let Ok(modified) = meta.modified() {
+                    let age = now
+                        .duration_since(modified)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(u64::MAX);
+                    if age < max_age_secs {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 // ── Session discovery ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -494,15 +535,19 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
 pub fn discover_starting_sessions(existing: &[SessionInfo], pmap: &ProcessMap) -> Vec<SessionInfo> {
     let now = SystemTime::now();
 
-    // Count recently-active sessions per project directory
+    // Count recently-active sessions per project directory.
+    // A session is active if: recently modified, has a live process, or has
+    // active subagents (skill/slash command running).
     let mut active_per_project: HashMap<String, usize> = HashMap::new();
     for s in existing {
         let age = now
             .duration_since(s.modified)
             .map(|d| d.as_secs())
             .unwrap_or(u64::MAX);
-        // A session modified in the last 5 minutes is considered active
-        if age < 300 {
+        let active = age < 300
+            || pmap.is_session_alive(&s.jsonl_path)
+            || has_active_subagents(&s.jsonl_path, 60);
+        if active {
             if let Some(name) = project_dir_name(&s.jsonl_path) {
                 *active_per_project.entry(name).or_default() += 1;
             }
@@ -516,7 +561,15 @@ pub fn discover_starting_sessions(existing: &[SessionInfo], pmap: &ProcessMap) -
 
     let mut result = Vec::new();
     for project_encoded in pmap.by_project.keys() {
-        // Process running but no active session → one starting entry
+        // Only consider processes whose CWD matches a known project directory.
+        // Subagent / skill processes often have a different CWD that doesn't
+        // correspond to any real project — skip them.
+        let project_dir = claude_dir.join(project_encoded);
+        if !project_dir.is_dir() {
+            continue;
+        }
+
+        // Project has at least one active session → no starting entry needed
         if active_per_project
             .get(project_encoded)
             .copied()

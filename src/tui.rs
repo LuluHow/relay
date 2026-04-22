@@ -170,19 +170,29 @@ impl App {
                 self.sessions.push((starting, empty_parsed));
             }
 
-            // Resurrect sessions that show new activity
+            // Resurrect sessions that show new activity: recent JSONL write,
+            // active subagents (skill running), or process detected alive again.
             self.dead_sessions.retain(|sid| {
-                self.sessions
-                    .iter()
-                    .any(|(info, parsed)| info.session_id == *sid && parsed.age_secs >= 5)
+                let Some((info, parsed)) = self.sessions.iter().find(|(i, _)| i.session_id == *sid)
+                else {
+                    return false; // session gone → remove from dead list
+                };
+                // Keep in dead_sessions only if ALL of these hold:
+                parsed.age_secs >= 5
+                    && !session::has_active_subagents(&info.jsonl_path, 30)
+                    && !pmap.is_session_alive(&info.jsonl_path)
             });
 
-            // Check process liveness for recent sessions (skip starting sessions)
+            // Check process liveness for recent sessions (skip starting sessions).
+            // Don't mark as dead if the JSONL was just written to (age < 10s)
+            // or if subagents are actively running (skill/slash command).
             for (info, parsed) in &self.sessions {
                 if !info.session_id.starts_with("starting-")
                     && parsed.age_secs < 300
+                    && parsed.age_secs >= 10
                     && !self.dead_sessions.contains(&info.session_id)
                     && !pmap.is_session_alive(&info.jsonl_path)
+                    && !session::has_active_subagents(&info.jsonl_path, 30)
                 {
                     self.dead_sessions.insert(info.session_id.clone());
                 }
