@@ -30,6 +30,12 @@ pub struct Config {
     pub discord_webhook: Option<String>,
     /// Slack webhook URL for handoff notifications (default: none)
     pub slack_webhook: Option<String>,
+    /// API server port (default: 4747)
+    pub api_port: u16,
+    /// API server bind address (default: "127.0.0.1")
+    pub api_bind: String,
+    /// API bearer token for authentication (default: none)
+    pub api_token: Option<String>,
 }
 
 impl Default for Config {
@@ -47,6 +53,9 @@ impl Default for Config {
             sound: true,
             discord_webhook: None,
             slack_webhook: None,
+            api_port: 4747,
+            api_bind: "127.0.0.1".to_string(),
+            api_token: None,
         }
     }
 }

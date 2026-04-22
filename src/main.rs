@@ -1,3 +1,4 @@
+mod api;
 mod config;
 mod git;
 mod handoff;
@@ -51,6 +52,15 @@ enum Commands {
     TestNotify,
     /// Remove all traces of relay (config, hooks, shell wrapper, binary)
     Uninstall,
+    /// Start the web API server
+    Serve {
+        /// Port to listen on
+        #[arg(long, default_value_t = 4747)]
+        port: u16,
+        /// Address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        bind: String,
+    },
     /// Orchestrate multiple Claude sessions from a plan file
     Orchestrate {
         /// Path to the plan TOML file
@@ -136,6 +146,11 @@ fn main() -> Result<()> {
         }
         Commands::Uninstall => {
             config::uninstall()?;
+        }
+        Commands::Serve { port, bind } => {
+            let cfg = config::load()?;
+            let addr = format!("{bind}:{port}");
+            tokio::runtime::Runtime::new()?.block_on(api::serve(cfg, addr))?;
         }
         Commands::Orchestrate {
             plan,
