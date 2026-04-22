@@ -240,7 +240,10 @@ pub fn discover_starting_sessions(
     // Count recently-active sessions per project directory
     let mut active_per_project: HashMap<String, usize> = HashMap::new();
     for s in existing {
-        let age = now.duration_since(s.modified).map(|d| d.as_secs()).unwrap_or(u64::MAX);
+        let age = now
+            .duration_since(s.modified)
+            .map(|d| d.as_secs())
+            .unwrap_or(u64::MAX);
         // A session modified in the last 5 minutes is considered active
         if age < 300 {
             if let Some(name) = project_dir_name(&s.jsonl_path) {
@@ -257,7 +260,12 @@ pub fn discover_starting_sessions(
     let mut result = Vec::new();
     for project_encoded in claude_pids.keys() {
         // Process running but no active session → one starting entry
-        if active_per_project.get(project_encoded).copied().unwrap_or(0) > 0 {
+        if active_per_project
+            .get(project_encoded)
+            .copied()
+            .unwrap_or(0)
+            > 0
+        {
             continue;
         }
 
