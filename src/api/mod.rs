@@ -7,13 +7,52 @@ use std::time::Duration;
 
 use anyhow::Result;
 use axum::{
+    body::Body,
+    extract::Request,
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
+use rust_embed::RustEmbed;
 use tower_http::cors::CorsLayer;
 
 use crate::config::Config;
 use state::AppState;
+
+#[derive(RustEmbed)]
+#[folder = "static/"]
+struct Assets;
+
+async fn static_handler(req: Request) -> Response {
+    let path = req.uri().path().trim_start_matches('/');
+    let path = if path.is_empty() { "index.html" } else { path };
+    serve_embedded(path)
+}
+
+fn serve_embedded(path: &str) -> Response {
+    match Assets::get(path) {
+        Some(file) => Response::builder()
+            .header(header::CONTENT_TYPE, mime_for_path(path))
+            .body(Body::from(file.data.into_owned()))
+            .unwrap(),
+        None => (StatusCode::NOT_FOUND, "Not Found").into_response(),
+    }
+}
+
+fn mime_for_path(path: &str) -> &'static str {
+    if path.ends_with(".html") {
+        "text/html; charset=utf-8"
+    } else if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else {
+        "application/octet-stream"
+    }
+}
 
 /// Start the relay API server.
 pub async fn serve(config: Config, bind: String) -> Result<()> {
@@ -38,6 +77,7 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
         .route("/api/handoffs/{id}", get(routes::get_handoff))
         .route("/api/config", get(routes::get_config))
         .route("/api/ws", get(ws::handler))
+        .fallback(static_handler)
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
