@@ -50,6 +50,11 @@ struct HandoffEntry {
     size: u64,
 }
 
+struct PendingRestart {
+    cwd: String,
+    restart_at: Instant,
+}
+
 struct App {
     tab: Tab,
     sessions: Vec<(SessionInfo, ParsedSession)>,
@@ -70,6 +75,8 @@ struct App {
     statuses: HashMap<String, SessionStatus>,
     // Process liveness cache: session IDs confirmed dead
     dead_sessions: HashSet<String>,
+    // Pending restart: fallback spawn if wrapper doesn't pick up next_prompt
+    pending_restart: Option<PendingRestart>,
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
@@ -98,6 +105,7 @@ impl App {
             pending_handoffs: HashSet::new(),
             statuses: HashMap::new(),
             dead_sessions: HashSet::new(),
+            pending_restart: None,
         };
         app.refresh();
         app
@@ -396,6 +404,18 @@ impl App {
         self.triggered_sessions.insert(info.session_id.clone());
         self.handoffs = load_handoffs();
 
+        // Schedule fallback restart: if the wrapper doesn't consume next_prompt
+        // within cooldown+10s, relay spawns claude directly in a new terminal
+        let cwd = self.statuses.get(&info.session_id)
+            .map(|s| s.cwd.as_str())
+            .filter(|c| !c.is_empty())
+            .unwrap_or(&parsed.cwd)
+            .to_string();
+        self.pending_restart = Some(PendingRestart {
+            cwd,
+            restart_at: Instant::now() + Duration::from_secs(self.config.cooldown + 10),
+        });
+
         let status = if killed {
             format!("auto-handoff: {} — {id}", reason)
         } else {
@@ -434,6 +454,38 @@ impl App {
 
             // Always clean up the event file
             hooks::clear_event(&event.session_id);
+        }
+    }
+
+    fn check_pending_restart(&mut self) {
+        let pending = match &self.pending_restart {
+            Some(p) if Instant::now() >= p.restart_at => PendingRestart {
+                cwd: p.cwd.clone(),
+                restart_at: p.restart_at,
+            },
+            _ => return,
+        };
+        self.pending_restart = None;
+
+        let next_prompt = dirs::home_dir()
+            .unwrap()
+            .join(".relay")
+            .join("next_prompt");
+
+        if !next_prompt.exists() {
+            // Wrapper consumed it — restart handled
+            self.status_msg = Some(("wrapper restarted session".to_string(), Instant::now()));
+            return;
+        }
+
+        // Wrapper didn't handle it — spawn claude in a new terminal
+        if spawn_claude_in_terminal(&pending.cwd) {
+            self.status_msg = Some(("spawned claude in new terminal".to_string(), Instant::now()));
+        } else {
+            self.status_msg = Some((
+                "restart failed — source ~/.relay/claude-wrapper.sh or run relay restore".to_string(),
+                Instant::now(),
+            ));
         }
     }
 
@@ -509,6 +561,52 @@ fn kill_process(pid: u32) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+/// Spawn claude in a new terminal window with the handoff prompt.
+/// Fallback when the shell wrapper isn't sourced.
+fn spawn_claude_in_terminal(cwd: &str) -> bool {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return false,
+    };
+    let next_prompt = home.join(".relay").join("next_prompt");
+    let restart_script = home.join(".relay").join("restart.sh");
+
+    let script_content = format!(
+        "#!/bin/bash\ncd '{}'\nstty sane 2>/dev/null\nprompt=$(cat '{}')\nrm -f '{}'\nprintf '\\n  \\033[36mrelay:\\033[0m restarting claude session...\\n\\n'\nsleep 2\nexec claude \"$prompt\"\n",
+        cwd.replace('\'', "'\\''"),
+        next_prompt.display(),
+        next_prompt.display(),
+    );
+
+    if std::fs::write(&restart_script, &script_content).is_err() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&restart_script, std::fs::Permissions::from_mode(0o755));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let applescript = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"bash '{}'\"\nend tell",
+            restart_script.display()
+        );
+        return Command::new("osascript")
+            .arg("-e")
+            .arg(&applescript)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+
+    #[allow(unreachable_code)]
+    false
 }
 
 // ── Data loading ────────────────────────────────────────────────────────────
@@ -594,6 +692,7 @@ fn run_loop(
             app.check_pending_handoffs();
             app.check_auto_commit();
         }
+        app.check_pending_restart();
 
         if event::poll(Duration::from_millis(200))? {
             if let Event::Key(key) = event::read()? {

@@ -81,13 +81,17 @@ const SHELL_WRAPPER: &str = r#"# relay — Claude Code wrapper for auto-handoff
 
 claude() {
   command claude "$@"
+  # Reset terminal in case claude was killed mid-session
+  stty sane 2>/dev/null
   while [ -f "$HOME/.relay/next_prompt" ]; do
     local prompt
     prompt="$(cat "$HOME/.relay/next_prompt")"
     rm -f "$HOME/.relay/next_prompt"
+    [ -z "$prompt" ] && break
     printf '\n  \033[36mrelay:\033[0m handoff detected, restarting in 5s...\n\n'
     sleep 5
     command claude "$prompt"
+    stty sane 2>/dev/null
   done
 }
 "#;
