@@ -28,7 +28,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            threshold: 75,
+            threshold: 20,
             max_turns: 0,
             interval: 10,
             cooldown: 5,
@@ -50,8 +50,8 @@ const DEFAULT_CONFIG: &str = "\
 # Requires sourcing the shell wrapper: source ~/.relay/claude-wrapper.sh
 auto_handoff = false
 
-# Context % to trigger handoff
-threshold = 75
+# Context % remaining to trigger handoff
+threshold = 20
 
 # Max conversation turns before handoff (0 = disabled)
 max_turns = 0
