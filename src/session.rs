@@ -11,24 +11,29 @@ use crate::util;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
-    Working, // age < 30s, process alive
-    Waiting, // age < 300s, process alive
-    Ended,   // age < 300s, process NOT alive
-    Idle,    // age >= 300s
+    Starting, // process alive, no JSONL data yet
+    Working,  // age < 30s, process alive
+    Waiting,  // age < 300s, process alive
+    Ended,    // age < 300s, process NOT alive
+    Idle,     // age >= 300s
 }
 
 impl SessionState {
     pub fn sort_key(self) -> u8 {
         match self {
-            SessionState::Working => 0,
-            SessionState::Waiting => 1,
-            SessionState::Ended => 2,
-            SessionState::Idle => 3,
+            SessionState::Starting => 0,
+            SessionState::Working => 1,
+            SessionState::Waiting => 2,
+            SessionState::Ended => 3,
+            SessionState::Idle => 4,
         }
     }
 
     pub fn is_active(self) -> bool {
-        matches!(self, SessionState::Working | SessionState::Waiting)
+        matches!(
+            self,
+            SessionState::Starting | SessionState::Working | SessionState::Waiting
+        )
     }
 }
 
@@ -223,6 +228,58 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
     Ok(sessions)
 }
 
+/// Discover running Claude processes that don't have a matching active session yet.
+/// Compares PID count per project with recently-active session count.
+/// Returns synthetic SessionInfo entries for the excess (starting) processes.
+pub fn discover_starting_sessions(
+    existing: &[SessionInfo],
+    claude_pids: &HashMap<String, Vec<u32>>,
+) -> Vec<SessionInfo> {
+    let now = SystemTime::now();
+
+    // Count recently-active sessions per project directory
+    let mut active_per_project: HashMap<String, usize> = HashMap::new();
+    for s in existing {
+        let age = now.duration_since(s.modified).map(|d| d.as_secs()).unwrap_or(u64::MAX);
+        // A session modified in the last 5 minutes is considered active
+        if age < 300 {
+            if let Some(name) = project_dir_name(&s.jsonl_path) {
+                *active_per_project.entry(name).or_default() += 1;
+            }
+        }
+    }
+
+    let claude_dir = match dirs::home_dir() {
+        Some(h) => h.join(".claude").join("projects"),
+        None => return Vec::new(),
+    };
+
+    let mut result = Vec::new();
+    for project_encoded in claude_pids.keys() {
+        // Process running but no active session → one starting entry
+        if active_per_project.get(project_encoded).copied().unwrap_or(0) > 0 {
+            continue;
+        }
+
+        // Decode: -Users-foo-bar -> /Users/foo/bar (same as discover_sessions)
+        let project_path = project_encoded.replace('-', "/");
+        let project_name = project_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(&project_path)
+            .to_string();
+
+        result.push(SessionInfo {
+            session_id: format!("starting-{project_encoded}"),
+            project_path: project_path.clone(),
+            project_name,
+            jsonl_path: claude_dir.join(project_encoded).join("_starting.jsonl"),
+            modified: SystemTime::now(),
+        });
+    }
+    result
+}
+
 /// Pick a session: by explicit ID, by project filter, or the most recent
 pub fn pick_session(
     sessions: &[SessionInfo],
@@ -296,6 +353,7 @@ pub fn print_status(sessions: &[SessionInfo]) -> Result<()> {
         };
         let state = classify_state(parsed.age_secs, process_dead);
         let status = match state {
+            SessionState::Starting => "starting".cyan(),
             SessionState::Working => "working".green(),
             SessionState::Waiting => "waiting".yellow(),
             SessionState::Ended => "ended".red(),
