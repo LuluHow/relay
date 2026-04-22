@@ -455,7 +455,7 @@ impl App {
         }
 
         let message =
-            git::generate_commit_message(parsed, status, reason, &self.config.commit_prefix);
+            git::generate_commit_message(cwd, parsed, status, reason, &self.config.commit_prefix);
 
         match git::auto_commit(cwd, &message) {
             Ok(hash) => {
