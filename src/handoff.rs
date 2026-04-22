@@ -252,7 +252,9 @@ mod tests {
 
     #[test]
     fn test_is_relay_handoff_detects_header() {
-        assert!(is_relay_handoff("# Handoff — myproject\n\n**Date:** 2025-01-01"));
+        assert!(is_relay_handoff(
+            "# Handoff — myproject\n\n**Date:** 2025-01-01"
+        ));
     }
 
     #[test]

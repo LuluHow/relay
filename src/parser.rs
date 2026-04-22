@@ -446,11 +446,16 @@ mod tests {
     fn test_skips_malformed_lines() {
         let dir = tempfile::tempdir().unwrap();
         let jsonl_path = dir.path().join("test.jsonl");
-        std::fs::write(&jsonl_path, concat!(
-            "not json at all\n",
-            r#"{"type":"user","message":{"role":"user","content":"hello"}}"#, "\n",
-            "{broken json\n",
-        )).unwrap();
+        std::fs::write(
+            &jsonl_path,
+            concat!(
+                "not json at all\n",
+                r#"{"type":"user","message":{"role":"user","content":"hello"}}"#,
+                "\n",
+                "{broken json\n",
+            ),
+        )
+        .unwrap();
 
         let info = SessionInfo {
             session_id: "test-malformed".to_string(),
@@ -505,6 +510,8 @@ mod tests {
         let parsed = parse_session(&info).unwrap();
         assert_eq!(parsed.tool_uses.len(), 1);
         assert_eq!(parsed.tool_uses[0].name, "Edit");
-        assert!(parsed.files_touched.contains(&"/tmp/test/foo.rs".to_string()));
+        assert!(parsed
+            .files_touched
+            .contains(&"/tmp/test/foo.rs".to_string()));
     }
 }
