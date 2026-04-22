@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use crate::parser::ParsedSession;
 use crate::statusline::SessionStatus;
 
-/// Check if a directory is inside a git work tree.
+/// Check if a directory is inside a git work tree (via rev-parse).
 pub fn is_git_repo(cwd: &str) -> bool {
     Command::new("git")
         .args(["-C", cwd, "rev-parse", "--is-inside-work-tree"])
