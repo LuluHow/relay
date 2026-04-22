@@ -2283,24 +2283,20 @@ fn orch_handle_key(app: &mut OrchApp, key: event::KeyEvent) {
 
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.selected_task > 0 {
-                app.selected_task -= 1;
-                app.scroll_offset = 0;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.selected_task > 0 => {
+            app.selected_task -= 1;
+            app.scroll_offset = 0;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if app.selected_task + 1 < app.orchestrator.tasks.len() {
-                app.selected_task += 1;
-                app.scroll_offset = 0;
-            }
+        KeyCode::Down | KeyCode::Char('j')
+            if app.selected_task + 1 < app.orchestrator.tasks.len() =>
+        {
+            app.selected_task += 1;
+            app.scroll_offset = 0;
         }
-        KeyCode::Char('a') => {
-            if !app.finished {
-                app.orchestrator.abort();
-                app.finished = true;
-                app.status_msg = Some(("aborted all tasks".to_string(), Instant::now()));
-            }
+        KeyCode::Char('a') if !app.finished => {
+            app.orchestrator.abort();
+            app.finished = true;
+            app.status_msg = Some(("aborted all tasks".to_string(), Instant::now()));
         }
         _ => {}
     }
