@@ -4,7 +4,7 @@ set -euo pipefail
 # relay — install script
 # Usage: curl -fsSL https://raw.githubusercontent.com/ludovichorem/relay/main/install.sh | bash
 
-REPO="https://github.com/ludovichorem/relay.git"
+REPO="https://github.com/LuluHow/relay.git"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 RELAY_DIR="$HOME/.relay"
 

@@ -18,34 +18,42 @@ When Claude Code approaches its context limit, relay saves the session state as 
 ### One-liner
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ludovichorem/relay/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/LuluHow/relay/main/install.sh | bash
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/ludovichorem/relay.git
+git clone https://github.com/LuluHow/relay.git
 cd relay
 cargo build --release
+mkdir -p ~/.local/bin
 cp target/release/relay ~/.local/bin/
+
+# Ensure ~/.local/bin is in your PATH
+export PATH="$HOME/.local/bin:$PATH"
+
 relay init
 ```
 
 Then add to your shell rc file (`~/.zshrc` or `~/.bashrc`):
 
 ```bash
+export PATH="$HOME/.local/bin:$PATH"
 source ~/.relay/claude-wrapper.sh
 ```
 
 ### From GitHub releases
 
-Download the binary for your platform from [Releases](https://github.com/ludovichorem/relay/releases), then:
+Download the binary for your platform from [Releases](https://github.com/LuluHow/relay/releases), then:
 
 ```bash
 chmod +x relay
+mkdir -p ~/.local/bin
 mv relay ~/.local/bin/
+export PATH="$HOME/.local/bin:$PATH"
 relay init
-# Add source line as shown above
+# Add export PATH and source lines as shown above
 ```
 
 ## Usage
