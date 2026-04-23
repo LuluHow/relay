@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    http::{Request, StatusCode},
+    http::{header, Request, StatusCode},
     Router,
 };
 use http_body_util::BodyExt;
@@ -271,4 +271,259 @@ async fn test_cors_headers() {
             .contains_key("access-control-allow-origin"),
         "CORS header missing"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Session snapshot shape (enriched fields)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_session_snapshot_shape() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_body(response.into_body()).await;
+    let arr = json.as_array().expect("sessions should be an array");
+
+    // If real sessions exist, verify enriched fields are present
+    if let Some(first) = arr.first() {
+        assert!(first["cwd"].is_string(), "missing cwd");
+        assert!(first["tool_uses"].is_array(), "missing tool_uses");
+        assert!(
+            first["files_touched_paths"].is_array(),
+            "missing files_touched_paths"
+        );
+        assert!(
+            first["context_history"].is_array(),
+            "missing context_history"
+        );
+        assert!(
+            first["compaction_count"].is_number(),
+            "missing compaction_count"
+        );
+        assert!(
+            first["total_input_tokens"].is_number(),
+            "missing total_input_tokens"
+        );
+        assert!(first["lines_added"].is_number(), "missing lines_added");
+        assert!(
+            first["context_window_size"].is_number(),
+            "missing context_window_size"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Session detail enriched (404 shape)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_session_detail_enriched() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions/fake-session-id-000")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = json_body(response.into_body()).await;
+    assert_eq!(json["error"], "session not found");
+}
+
+// ---------------------------------------------------------------------------
+// Config toggle
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_config_toggle_auto_handoff() {
+    let state = AppState::new(Config::default());
+    let app = build_app(state.clone());
+
+    // Toggle auto_handoff ON
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_handoff","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify config reflects the change
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_body(response.into_body()).await;
+    assert_eq!(json["auto_handoff"], true);
+
+    // Toggle auto_handoff OFF
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_handoff","value":false}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify it's now false
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = json_body(response.into_body()).await;
+    assert_eq!(json["auto_handoff"], false);
+}
+
+#[tokio::test]
+async fn test_config_toggle_auto_commit() {
+    let state = AppState::new(Config::default());
+    let app = build_app(state.clone());
+
+    // Toggle auto_commit ON
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_commit","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify config reflects the change
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_body(response.into_body()).await;
+    assert_eq!(json["auto_commit"], true);
+
+    // Toggle auto_commit OFF
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_commit","value":false}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify it's now false
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = json_body(response.into_body()).await;
+    assert_eq!(json["auto_commit"], false);
+}
+
+#[tokio::test]
+async fn test_config_toggle_invalid_key() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"invalid_key","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_config_toggle_auth() {
+    let app = app_with_token("toggle-secret");
+
+    // Without token → 401
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_handoff","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // With token → 200
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header("Authorization", "Bearer toggle-secret")
+                .body(Body::from(r#"{"key":"auto_handoff","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 }
