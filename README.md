@@ -203,6 +203,11 @@ sound = true
 # Slack webhook URL for handoff notifications (optional)
 # slack_webhook = "https://hooks.slack.com/services/..."
 
+# Workspace directories for the plan wizard project selector
+# Only projects within these directories will appear in the dropdown
+# If empty, all discovered projects are shown
+# workspaces = ["/Users/me/projects", "/Users/me/work"]
+
 # Web dashboard / API settings
 # api_port = 4747
 # api_bind = "127.0.0.1"
