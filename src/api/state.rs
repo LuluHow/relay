@@ -9,6 +9,9 @@ use tokio::sync::{broadcast, RwLock};
 use crate::config::Config;
 use crate::orchestrator::{OrchestrationSnapshot, Orchestrator, Plan};
 use crate::parser;
+use crate::prompt_runner::{
+    ConvSnapshot, ConvSummary, ConversationManager, CreateConversationRequest, SendMessageRequest,
+};
 use crate::session;
 use crate::statusline;
 
@@ -29,6 +32,7 @@ pub struct AppStateInner {
     pub config_overrides: HashMap<String, bool>,
     pub last_refresh: Instant,
     pub orchestrator: Option<OrchestrationHandle>,
+    pub conversations: ConversationManager,
 }
 
 pub struct OrchestrationHandle {
@@ -119,6 +123,7 @@ pub enum Event {
     SessionsUpdated,
     HandoffCreated { id: String },
     OrchestrationUpdated,
+    PromptUpdated,
     Error { message: String },
 }
 
@@ -137,6 +142,7 @@ impl AppState {
                 config_overrides: HashMap::new(),
                 last_refresh: Instant::now(),
                 orchestrator: None,
+                conversations: ConversationManager::new(),
             })),
             event_tx,
         }
@@ -402,6 +408,54 @@ impl AppState {
         let handle = inner.orchestrator.as_ref().ok_or("no orchestration")?;
         let orch = handle.orchestrator.lock().map_err(|e| e.to_string())?;
         orch.create_pull_request()
+    }
+
+    // ── Conversations ───────────────────────────────────────────────────
+
+    pub async fn create_conversation(
+        &self,
+        req: CreateConversationRequest,
+    ) -> Result<String, String> {
+        let mut inner = self.inner.write().await;
+        let id = inner.conversations.create(req)?;
+        let _ = self.event_tx.send(Event::PromptUpdated);
+        Ok(id)
+    }
+
+    pub async fn send_message(&self, conv_id: &str, req: SendMessageRequest) -> Result<(), String> {
+        let mut inner = self.inner.write().await;
+        inner.conversations.send_message(conv_id, req)?;
+        let _ = self.event_tx.send(Event::PromptUpdated);
+        Ok(())
+    }
+
+    pub async fn poll_conversations(&self) {
+        let mut inner = self.inner.write().await;
+        if inner.conversations.poll() {
+            let _ = self.event_tx.send(Event::PromptUpdated);
+        }
+    }
+
+    pub async fn list_conversations(&self) -> Vec<ConvSummary> {
+        let inner = self.inner.read().await;
+        inner.conversations.list()
+    }
+
+    pub async fn conversation_snapshot(&self, id: &str) -> Option<ConvSnapshot> {
+        let inner = self.inner.read().await;
+        inner.conversations.snapshot(id)
+    }
+
+    pub async fn conversation_stream(&self, id: &str, offset: usize) -> Option<Vec<String>> {
+        let inner = self.inner.read().await;
+        inner.conversations.streaming_output(id, offset)
+    }
+
+    pub async fn abort_conversation(&self, id: &str) -> Result<(), String> {
+        let mut inner = self.inner.write().await;
+        inner.conversations.abort(id)?;
+        let _ = self.event_tx.send(Event::PromptUpdated);
+        Ok(())
     }
 }
 

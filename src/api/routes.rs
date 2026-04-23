@@ -14,6 +14,7 @@ use crate::api::state::{
     ToolUseSnapshot,
 };
 use crate::orchestrator;
+use crate::prompt_runner::{CreateConversationRequest, SendMessageRequest};
 use crate::{handoff, parser, session, storage};
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
@@ -551,5 +552,81 @@ pub async fn get_plan_history(Path(id): Path<String>) -> Response {
             }),
         )
             .into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Conversation handlers
+// ---------------------------------------------------------------------------
+
+pub async fn create_conversation(
+    State(state): State<AppState>,
+    Json(req): Json<CreateConversationRequest>,
+) -> Response {
+    match state.create_conversation(req).await {
+        Ok(id) => Json(serde_json::json!({ "id": id })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),
+    }
+}
+
+pub async fn list_conversations(State(state): State<AppState>) -> Response {
+    Json(state.list_conversations().await).into_response()
+}
+
+pub async fn get_conversation(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    match state.conversation_snapshot(&id).await {
+        Some(snapshot) => Json(snapshot).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "conversation not found",
+            }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn send_message(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<SendMessageRequest>,
+) -> Response {
+    match state.send_message(&id, req).await {
+        Ok(()) => Json(serde_json::json!({ "status": "sent" })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct StreamQuery {
+    offset: Option<usize>,
+}
+
+pub async fn stream_conversation(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<StreamQuery>,
+) -> Response {
+    let offset = params.offset.unwrap_or(0);
+    match state.conversation_stream(&id, offset).await {
+        Some(lines) => Json(serde_json::json!({
+            "lines": lines,
+            "offset": offset + lines.len(),
+        }))
+        .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "conversation not found",
+            }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn abort_conversation(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    match state.abort_conversation(&id).await {
+        Ok(()) => Json(serde_json::json!({ "status": "aborted" })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),
     }
 }

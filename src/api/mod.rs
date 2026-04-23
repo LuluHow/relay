@@ -74,6 +74,21 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/orchestrate/pr", post(routes::create_orchestration_pr))
         .route("/api/plans/history", get(routes::list_plan_history))
         .route("/api/plans/history/{id}", get(routes::get_plan_history))
+        .route("/api/conversations", get(routes::list_conversations))
+        .route("/api/conversations", post(routes::create_conversation))
+        .route("/api/conversations/{id}", get(routes::get_conversation))
+        .route(
+            "/api/conversations/{id}/message",
+            post(routes::send_message),
+        )
+        .route(
+            "/api/conversations/{id}/stream",
+            get(routes::stream_conversation),
+        )
+        .route(
+            "/api/conversations/{id}/abort",
+            post(routes::abort_conversation),
+        )
         .route("/api/ws", get(ws::handler))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
@@ -100,6 +115,16 @@ pub async fn serve(config: Config, bind: String) -> Result<()> {
         loop {
             interval.tick().await;
             poll_state.refresh().await;
+        }
+    });
+
+    // Background task: poll conversations every 1 second
+    let conv_poll_state = app_state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            conv_poll_state.poll_conversations().await;
         }
     });
 

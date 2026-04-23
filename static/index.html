@@ -1296,6 +1296,422 @@
     }
     .plans-sidebar-toggle:hover { color: var(--text); border-color: var(--muted); }
 
+    /* ── Prompt view ── */
+    .prompt-view {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .prompt-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .prompt-sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .prompt-sidebar .col-title {
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .prompt-sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .btn-new-prompt {
+      margin: 8px 12px;
+      padding: 5px 0;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-new-prompt:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .prompt-history-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .prompt-history-item:hover { background: var(--bg-alt); }
+    .prompt-history-item.selected {
+      background: var(--sel-bg);
+      border-left: 2px solid var(--green);
+      padding-left: 10px;
+    }
+
+    .prompt-history-item .phi-preview {
+      font-size: 11px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .prompt-history-item .phi-meta {
+      font-size: 10px;
+      color: var(--dim);
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .prompt-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    /* ── Prompt form ── */
+    .prompt-form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      padding: 32px;
+      gap: 14px;
+      overflow-y: auto;
+    }
+
+    .prompt-form label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      align-self: stretch;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .prompt-form textarea {
+      width: 100%;
+      max-width: 700px;
+      min-height: 120px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .prompt-form textarea:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .prompt-form select,
+    .prompt-form input[type="text"],
+    .prompt-form input[type="number"] {
+      width: 100%;
+      max-width: 700px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .prompt-form select:focus,
+    .prompt-form input:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .prompt-form .btn-launch {
+      background: none;
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 6px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .prompt-form .btn-launch:hover {
+      background: var(--sel-bg);
+    }
+    .prompt-form .btn-launch.loading {
+      border-color: var(--amber);
+      color: var(--amber);
+      pointer-events: none;
+    }
+
+    .prompt-options-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 700px;
+    }
+    .prompt-options-row > .field-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .prompt-options-row .field-group label {
+      margin: 0;
+      align-self: flex-start;
+    }
+
+    .prompt-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      max-width: 700px;
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .prompt-toggle-row input[type="checkbox"] {
+      width: auto;
+    }
+
+    .prompt-error {
+      color: var(--red);
+      font-size: 11px;
+      max-width: 700px;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* ── Prompt output viewer ── */
+    .prompt-output-view {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .prompt-output-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .prompt-output-header .po-id {
+      font-family: var(--font-title);
+      font-size: 13px;
+      color: var(--cyan);
+    }
+
+    .prompt-output-header .po-status {
+      font-size: 11px;
+      padding: 1px 8px;
+      border: 1px solid;
+      border-radius: 3px;
+    }
+
+    .prompt-output-header .po-elapsed {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    .prompt-output-header .po-prompt-preview {
+      font-size: 11px;
+      color: var(--dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 400px;
+    }
+
+    .prompt-output-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      background: var(--bg);
+    }
+
+    .prompt-output-body pre {
+      font-family: var(--font);
+      font-size: 12px;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .prompt-output-body .stderr-line {
+      color: var(--amber);
+    }
+
+    .prompt-output-actions {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-prompt-action {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 4px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .btn-prompt-action:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+    .btn-prompt-action.abort {
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .btn-prompt-action.abort:hover {
+      background: rgba(209, 127, 127, 0.1);
+    }
+
+    /* ── Chat messages ── */
+    .chat-msg {
+      margin-bottom: 12px;
+      max-width: 100%;
+    }
+
+    .chat-role {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 3px;
+      font-weight: bold;
+    }
+
+    .chat-user .chat-role { color: var(--cyan); }
+    .chat-assistant .chat-role { color: var(--green); }
+
+    .chat-user .chat-content {
+      color: var(--text);
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 8px 10px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    .chat-assistant .chat-content {
+      font-family: var(--font);
+      font-size: 12px;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      margin: 0;
+      padding: 8px 10px;
+      background: var(--sel-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    .chat-msg.streaming .chat-content {
+      border-color: var(--green);
+      border-style: dashed;
+    }
+
+    .typing-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse-dot 1s infinite;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Chat input bar ── */
+    .chat-input-bar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      outline: none;
+    }
+    .chat-input:focus {
+      border-color: var(--green);
+    }
+    .chat-input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .prompt-sidebar-toggle {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      margin: 8px 12px;
+      flex-shrink: 0;
+    }
+    .prompt-sidebar-toggle:hover { color: var(--text); border-color: var(--muted); }
+
     /* ── Responsive: Tablet ── */
     @media (max-width: 1024px) {
       .layout {
@@ -1496,6 +1912,69 @@
         text-align: center;
       }
 
+      /* ── Prompt view ── */
+      .prompt-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+
+      .prompt-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: none;
+        overflow: visible;
+      }
+
+      .prompt-sidebar.collapsed .prompt-sidebar-body {
+        display: none;
+      }
+      .prompt-sidebar.collapsed .btn-new-prompt {
+        display: none;
+      }
+
+      .prompt-sidebar-toggle {
+        display: block;
+      }
+
+      .prompt-sidebar-body {
+        max-height: 30vh;
+        overflow-y: auto;
+      }
+
+      .prompt-form {
+        padding: 16px 12px;
+        gap: 10px;
+      }
+
+      .prompt-form textarea {
+        min-height: 100px;
+        max-width: 100%;
+      }
+
+      .prompt-form label,
+      .prompt-form select,
+      .prompt-form input,
+      .prompt-options-row {
+        max-width: 100%;
+      }
+
+      .prompt-error {
+        max-width: 100%;
+      }
+
+      .prompt-output-header {
+        padding: 8px 10px;
+      }
+
+      .prompt-output-body {
+        padding: 8px 10px;
+      }
+
+      .prompt-output-actions {
+        flex-wrap: wrap;
+        padding: 6px 10px;
+      }
+
       /* Prevent iOS auto-zoom on input focus (requires font-size >= 16px) */
       input, select, textarea {
         font-size: 16px !important;
@@ -1533,6 +2012,7 @@
       <button class="tab-btn active" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
       <button class="tab-btn" data-tab="handoffs" onclick="switchTab('handoffs')">Handoffs</button>
       <button class="tab-btn" data-tab="plans" onclick="switchTab('plans')">Plans</button>
+      <button class="tab-btn" data-tab="prompts" onclick="switchTab('prompts')">Prompt</button>
     </div>
     <div class="config-toggles" id="config-toggles">
       <button class="btn-toggle off" id="btn-auto-handoff" onclick="toggleConfig('auto_handoff')" title="Toggle auto-handoff">auto OFF</button>
@@ -1577,11 +2057,14 @@
   <!-- Plans view -->
   <div class="plans-view" id="plans-view" style="display:none"></div>
 
+  <!-- Prompt view -->
+  <div class="prompt-view" id="prompts-view" style="display:none"></div>
+
   <footer>
     <span id="footer-counts">&mdash;</span>
     <span id="footer-updated">&mdash;</span>
     <span id="footer-uptime"></span>
-    <span class="footer-hints">1/2/3 tabs &middot; j/k navigate &middot; enter select</span>
+    <span class="footer-hints">1/2/3/4 tabs &middot; j/k navigate &middot; enter select</span>
   </footer>
 
   <script>
@@ -1681,6 +2164,11 @@
     let planMode = 'wizard'; // 'wizard' or 'toml'
     let wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
     let wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: true, project: '' };
+    let conversations = [];
+    let selectedConvId = null;
+    let convStreamOffset = {};   // id -> last offset for streaming
+    let convPollTimer = null;
+    let convFormState = { project: '', model: '', skip_permissions: true };
     let configAutoHandoff = false;
     let configAutoCommit = false;
     let configWorkspaces = [];
@@ -2289,6 +2777,7 @@
       document.getElementById('sessions-view').style.display = tab === 'sessions' ? 'grid' : 'none';
       document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
       document.getElementById('plans-view').style.display = tab === 'plans' ? 'block' : 'none';
+      document.getElementById('prompts-view').style.display = tab === 'prompts' ? 'block' : 'none';
       if (tab === 'sessions') {
         renderSessionList();
         renderSessionDetail();
@@ -2296,6 +2785,7 @@
       }
       if (tab === 'handoffs') renderHandoffs();
       if (tab === 'plans') renderOrchestration(true);
+      if (tab === 'prompts') renderPrompts();
     }
 
     async function toggleHandoff(id) {
@@ -2413,6 +2903,15 @@
               notifyOrchStateChange(orchestrationState.state);
             }
             renderOrchestration();
+            break;
+          }
+          case 'conversations_updated': {
+            conversations = msg.conversations || [];
+            if (activeTab === 'prompts' && selectedConvId) {
+              fetchConvDetail(selectedConvId).then(() => renderPrompts());
+            } else if (activeTab === 'prompts') {
+              renderPrompts();
+            }
             break;
           }
           case 'resync':
@@ -3251,6 +3750,320 @@
       }
     }
 
+    // ── Chat Tab ──
+
+    function convStatusColor(status) {
+      switch (status) {
+        case 'responding': return 'var(--green)';
+        case 'idle':       return 'var(--cyan)';
+        case 'ended':      return 'var(--red)';
+        default:           return 'var(--dim)';
+      }
+    }
+
+    let convDetailCache = {}; // id -> full snapshot with messages
+
+    function renderPrompts() {
+      const view = document.getElementById('prompts-view');
+      let html = '<div class="prompt-layout">';
+
+      // Left sidebar: conversation list
+      html += '<div class="prompt-sidebar collapsed">';
+      html += '<button class="prompt-sidebar-toggle" onclick="togglePromptSidebar()">Conversations \u25BC</button>';
+      html += '<div class="col-title">Conversations</div>';
+      html += '<button class="btn-new-prompt" onclick="showNewConv()">+ New</button>';
+      html += '<div class="prompt-sidebar-body">';
+
+      for (const c of conversations) {
+        const isSelected = selectedConvId === c.id;
+        const stCol = convStatusColor(c.status);
+        html += '<div class="prompt-history-item' + (isSelected ? ' selected' : '') + '" data-id="' + esc(c.id) + '" onclick="selectConv(\'' + esc(c.id) + '\')">'
+          + '<div class="phi-preview">' + esc(c.last_message_preview || 'New conversation') + '</div>'
+          + '<div class="phi-meta">'
+          + '<span style="color:' + stCol + '">' + esc(c.status) + '</span>'
+          + '<span>' + c.message_count + ' msgs</span>'
+          + '<span>' + fmtElapsed(c.elapsed_secs || 0) + '</span>'
+          + '</div></div>';
+      }
+
+      if (!conversations.length) {
+        html += '<div class="empty" style="padding:12px;font-size:11px">No conversations</div>';
+      }
+
+      html += '</div></div>';
+
+      // Right main area
+      html += '<div class="prompt-main">';
+      if (selectedConvId) {
+        html += renderChatView(selectedConvId);
+      } else {
+        html += renderNewConvForm();
+      }
+      html += '</div>';
+      html += '</div>';
+
+      // Capture scroll state before DOM patch
+      const chatScrollBefore = document.getElementById('chat-messages');
+      const wasAtBottom = chatScrollBefore
+        ? chatScrollBefore.scrollHeight - chatScrollBefore.scrollTop - chatScrollBefore.clientHeight < 80
+        : true;
+      const prevScrollTop = chatScrollBefore ? chatScrollBefore.scrollTop : 0;
+
+      patchDOM(view, html);
+
+      // Restore scroll: stay where user was, or follow if at bottom
+      const chatScrollAfter = document.getElementById('chat-messages');
+      if (chatScrollAfter) {
+        if (wasAtBottom) {
+          chatScrollAfter.scrollTop = chatScrollAfter.scrollHeight;
+        } else {
+          chatScrollAfter.scrollTop = prevScrollTop;
+        }
+      }
+    }
+
+    function renderNewConvForm() {
+      const cf = convFormState;
+      let html = '<div class="prompt-form">';
+      html += '<div style="font-family:var(--font-title);font-size:14px;color:var(--green);margin-bottom:8px">New Conversation</div>';
+
+      html += '<div class="prompt-options-row">';
+      html += '<div class="field-group"><label>Project</label>';
+      html += '<select id="cf-project">' + projectOptions(cf.project) + '</select></div>';
+      html += '<div class="field-group"><label>Model</label>';
+      html += '<input type="text" id="cf-model" placeholder="e.g. claude-sonnet-4-6" value="' + esc(cf.model) + '"></div>';
+      html += '</div>';
+
+      html += '<div class="prompt-toggle-row">';
+      html += '<input type="checkbox" id="cf-skip-perms"' + (cf.skip_permissions ? ' checked' : '') + '>';
+      html += '<label for="cf-skip-perms">Autonomous mode (skip permission prompts)</label>';
+      html += '</div>';
+
+      html += '<button class="btn-launch" id="btn-create-conv" onclick="createConv()">Start Conversation</button>';
+      html += '<div class="prompt-error" id="conv-error"></div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    function renderChatView(id) {
+      const detail = convDetailCache[id];
+      const summary = conversations.find(c => c.id === id);
+      const status = detail ? detail.status : (summary ? summary.status : 'idle');
+      const messages = detail ? detail.messages : [];
+      const streaming = detail ? detail.streaming_output : [];
+      const isResponding = status === 'responding';
+      const stCol = convStatusColor(status);
+
+      let html = '<div class="prompt-output-view">';
+
+      // Header
+      html += '<div class="prompt-output-header">';
+      html += '<span class="po-id">' + esc(id) + '</span>';
+      html += '<span class="po-status" style="color:' + stCol + ';border-color:' + stCol + '">' + esc(status) + '</span>';
+      if (detail) html += '<span class="po-elapsed">' + fmtElapsed(detail.elapsed_secs || 0) + '</span>';
+      html += '</div>';
+
+      // Messages area
+      html += '<div class="prompt-output-body" id="chat-messages">';
+
+      if (!messages.length && !isResponding) {
+        html += '<div style="color:var(--muted);padding:20px;text-align:center">Send a message to start the conversation</div>';
+      }
+
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          html += '<div class="chat-msg chat-user"><div class="chat-role">You</div><div class="chat-content">' + esc(msg.content) + '</div></div>';
+        } else {
+          html += '<div class="chat-msg chat-assistant"><div class="chat-role">Claude</div><pre class="chat-content">' + esc(msg.content) + '</pre></div>';
+        }
+      }
+
+      // Streaming response
+      if (isResponding && streaming.length) {
+        html += '<div class="chat-msg chat-assistant streaming"><div class="chat-role">Claude <span class="typing-dot"></span></div><pre class="chat-content">';
+        for (const line of streaming) {
+          if (line.startsWith('[stderr] ')) {
+            html += '<span class="stderr-line">' + esc(line) + '</span>\n';
+          } else {
+            html += esc(line) + '\n';
+          }
+        }
+        html += '</pre></div>';
+      } else if (isResponding) {
+        html += '<div class="chat-msg chat-assistant streaming"><div class="chat-role">Claude <span class="typing-dot"></span></div><pre class="chat-content" style="color:var(--muted)">Thinking...</pre></div>';
+      }
+
+      html += '</div>';
+
+      // Input bar
+      html += '<div class="chat-input-bar">';
+      if (isResponding) {
+        html += '<button class="btn-prompt-action abort" onclick="abortConv(\'' + esc(id) + '\')">Stop</button>';
+        html += '<input class="chat-input" disabled placeholder="Waiting for response...">';
+      } else {
+        html += '<input class="chat-input" id="chat-input" placeholder="Send a message..." onkeydown="chatInputKey(event, \'' + esc(id) + '\')" autofocus>';
+        html += '<button class="btn-prompt-action" onclick="sendChatMsg(\'' + esc(id) + '\')">Send</button>';
+      }
+      html += '</div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    function showNewConv() {
+      selectedConvId = null;
+      renderPrompts();
+    }
+
+    async function selectConv(id) {
+      selectedConvId = id;
+      // Fetch full detail
+      await fetchConvDetail(id);
+      renderPrompts();
+      startConvPoll();
+    }
+
+    async function fetchConvDetail(id) {
+      try {
+        const res = await apiFetch('/api/conversations/' + encodeURIComponent(id));
+        if (res.ok) {
+          convDetailCache[id] = await res.json();
+        }
+      } catch (_) {}
+    }
+
+    async function fetchConvStream(id) {
+      const offset = convStreamOffset[id] || 0;
+      try {
+        const res = await apiFetch('/api/conversations/' + encodeURIComponent(id) + '/stream?offset=' + offset);
+        if (res.ok) {
+          const data = await res.json();
+          convStreamOffset[id] = data.offset;
+        }
+      } catch (_) {}
+    }
+
+    async function fetchConvList() {
+      try {
+        const res = await apiFetch('/api/conversations');
+        if (res.ok) conversations = await res.json();
+      } catch (_) {}
+    }
+
+    function startConvPoll() {
+      if (convPollTimer) return;
+      convPollTimer = setInterval(async () => {
+        await fetchConvList();
+        // Refresh selected conversation detail
+        if (selectedConvId) {
+          await fetchConvDetail(selectedConvId);
+        }
+        if (activeTab === 'prompts') renderPrompts();
+      }, 1500);
+    }
+
+    async function createConv() {
+      const errEl = document.getElementById('conv-error');
+      const btn = document.getElementById('btn-create-conv');
+
+      const project = (document.getElementById('cf-project') || {}).value || '';
+      const model = (document.getElementById('cf-model') || {}).value || '';
+      const skipPerms = (document.getElementById('cf-skip-perms') || {}).checked || false;
+
+      convFormState = { project, model, skip_permissions: skipPerms };
+
+      btn.classList.add('loading');
+      btn.textContent = 'Creating\u2026';
+      if (errEl) errEl.textContent = '';
+
+      const body = { skip_permissions: skipPerms };
+      if (project && project !== '__new__') body.project_path = project;
+      if (model.trim()) body.model = model.trim();
+
+      try {
+        const res = await apiFetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          selectedConvId = data.id;
+          await fetchConvList();
+          await fetchConvDetail(data.id);
+          renderPrompts();
+          startConvPoll();
+          // Focus the chat input
+          setTimeout(() => {
+            const inp = document.getElementById('chat-input');
+            if (inp) inp.focus();
+          }, 50);
+        } else {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          if (errEl) errEl.textContent = rb.error || 'Failed';
+          btn.classList.remove('loading');
+          btn.textContent = 'Start Conversation';
+        }
+      } catch (e) {
+        if (errEl) errEl.textContent = 'Network error: ' + e.message;
+        btn.classList.remove('loading');
+        btn.textContent = 'Start Conversation';
+      }
+    }
+
+    async function sendChatMsg(convId) {
+      const inp = document.getElementById('chat-input');
+      if (!inp) return;
+      const content = inp.value.trim();
+      if (!content) return;
+
+      inp.value = '';
+      inp.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/conversations/' + encodeURIComponent(convId) + '/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        if (res.ok) {
+          convStreamOffset[convId] = 0;
+          await fetchConvDetail(convId);
+          renderPrompts();
+        } else {
+          const rb = await res.json().catch(() => ({ error: 'Failed' }));
+          alert(rb.error || 'Send failed');
+          inp.disabled = false;
+          inp.value = content;
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
+        inp.disabled = false;
+        inp.value = content;
+      }
+    }
+
+    function chatInputKey(e, convId) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMsg(convId);
+      }
+    }
+
+    async function abortConv(id) {
+      try {
+        await apiFetch('/api/conversations/' + encodeURIComponent(id) + '/abort', { method: 'POST' });
+        await fetchConvDetail(id);
+        renderPrompts();
+      } catch (_) {}
+    }
+
+    function togglePromptSidebar() {
+      const sidebar = document.querySelector('.prompt-sidebar');
+      if (sidebar) sidebar.classList.toggle('collapsed');
+    }
+
     function notifyOrchStateChange(newState) {
       if (Notification.permission !== 'granted') return;
       if (newState === 'completed' || newState === 'failed') {
@@ -3272,6 +4085,7 @@
         case '1': switchTab('sessions'); break;
         case '2': switchTab('handoffs'); break;
         case '3': switchTab('plans'); break;
+        case '4': switchTab('prompts'); break;
         case 'j':
         case 'k': {
           if (activeTab !== 'sessions' || !sessions.length) return;
@@ -3314,9 +4128,10 @@
         hideAuth();
       }
       await fetchVersion();
-      await Promise.allSettled([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects(), fetchPlanHistory()]);
+      await Promise.allSettled([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects(), fetchPlanHistory(), fetchConvList()]);
       connectWs();
       startOrchPoll();
+      startConvPoll();
       setInterval(fetchConfig, 5000); // poll config to sync TUI toggles
       checkNotifPermission();
       renderConfigToggles();

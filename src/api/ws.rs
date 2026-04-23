@@ -8,6 +8,7 @@ use tokio::sync::broadcast::error::RecvError;
 
 use crate::api::state::{AppState, Event, HandoffEntry, SessionSummary};
 use crate::orchestrator::OrchestrationSnapshot;
+use crate::prompt_runner::ConvSummary;
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -24,6 +25,9 @@ enum WsMessage {
     },
     OrchestrationUpdated {
         orchestration: OrchestrationSnapshot,
+    },
+    ConversationsUpdated {
+        conversations: Vec<ConvSummary>,
     },
     Error {
         message: String,
@@ -67,6 +71,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         } else {
                             continue;
                         }
+                    }
+                    Event::PromptUpdated => {
+                        let conversations = state.list_conversations().await;
+                        WsMessage::ConversationsUpdated { conversations }
                     }
                     Event::Error { message } => WsMessage::Error { message },
                 };
