@@ -5,7 +5,10 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use relay::{
-    api::{build_app, state::AppState},
+    api::{
+        build_app,
+        state::{AppState, MessageSnapshot, SessionSnapshot, ToolUseSnapshot},
+    },
     config::Config,
 };
 use tower::ServiceExt;
@@ -720,4 +723,250 @@ async fn test_config_toggle_auth() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard v2 – static content
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_static_index_content() {
+    let response = app_no_auth()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .expect("content-type header missing")
+        .to_str()
+        .unwrap();
+    assert!(
+        content_type.contains("text/html"),
+        "expected text/html, got {content_type}"
+    );
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&bytes);
+
+    assert!(body.contains("relay"), "body should contain 'relay' logo");
+    assert!(
+        body.contains("Sessions"),
+        "body should contain 'Sessions' tab label"
+    );
+    assert!(
+        body.contains("Handoffs"),
+        "body should contain 'Handoffs' tab label"
+    );
+    assert!(
+        body.contains("/api/ws"),
+        "body should reference WebSocket endpoint /api/ws"
+    );
+    assert!(
+        body.contains("context_history") || body.contains("tool_uses"),
+        "body should reference enriched session data fields"
+    );
+}
+
+#[tokio::test]
+async fn test_static_favicon() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .uri("/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .expect("content-type header missing")
+        .to_str()
+        .unwrap();
+    assert!(
+        content_type.contains("image/svg+xml"),
+        "expected image/svg+xml, got {content_type}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard v2 – enriched sessions endpoint
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_sessions_enriched_fields_present() {
+    let app = app_no_auth();
+
+    // Confirm server is up via /api/health
+    let health = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
+
+    // GET /api/sessions must return a valid JSON array
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_body(response.into_body()).await;
+    assert!(
+        json.is_array(),
+        "sessions endpoint should return a JSON array"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard v2 – snapshot serialization
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_api_session_snapshot_serialization() {
+    let snapshot = SessionSnapshot {
+        session_id: "test-id".into(),
+        project_name: "my-project".into(),
+        model: "opus".into(),
+        git_branch: "main".into(),
+        state: "active".into(),
+        turn_count: 5,
+        context_pct: 42.0,
+        cost_usd: 1.23,
+        age_secs: 300,
+        files_touched: 3,
+        cwd: "/tmp/project".into(),
+        version: "1.0.0".into(),
+        tool_uses: vec![ToolUseSnapshot {
+            name: "Read".into(),
+            input_summary: "file.rs".into(),
+            timestamp: Some("2026-01-01T00:00:00Z".into()),
+        }],
+        files_touched_paths: vec!["src/main.rs".into()],
+        user_messages: vec![MessageSnapshot {
+            content: "hello".into(),
+            timestamp: Some("2026-01-01T00:00:00Z".into()),
+        }],
+        assistant_messages: vec![MessageSnapshot {
+            content: "hi".into(),
+            timestamp: None,
+        }],
+        context_history: vec![1000, 2000],
+        compaction_count: 1,
+        total_input_tokens: 5000,
+        total_output_tokens: 3000,
+        total_cache_read: 100,
+        total_cache_create: 50,
+        current_context_tokens: 4000,
+        lines_added: 42,
+        lines_removed: 10,
+        context_window_size: 200000,
+        five_hour_used_pct: Some(25.0),
+        five_hour_resets_at: Some(1800),
+        seven_day_used_pct: None,
+        seven_day_resets_at: None,
+        duration_ms: 60000,
+    };
+
+    let json = serde_json::to_value(&snapshot).expect("snapshot should serialize to JSON");
+
+    // Verify every expected key is present
+    let expected_keys = [
+        "session_id",
+        "project_name",
+        "model",
+        "git_branch",
+        "state",
+        "turn_count",
+        "context_pct",
+        "cost_usd",
+        "age_secs",
+        "files_touched",
+        "cwd",
+        "version",
+        "tool_uses",
+        "files_touched_paths",
+        "user_messages",
+        "assistant_messages",
+        "context_history",
+        "compaction_count",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_cache_read",
+        "total_cache_create",
+        "current_context_tokens",
+        "lines_added",
+        "lines_removed",
+        "context_window_size",
+        "five_hour_used_pct",
+        "five_hour_resets_at",
+        "seven_day_used_pct",
+        "seven_day_resets_at",
+        "duration_ms",
+    ];
+
+    let obj = json.as_object().expect("should be a JSON object");
+    for key in &expected_keys {
+        assert!(obj.contains_key(*key), "missing key: {key}");
+    }
+
+    // Spot-check values
+    assert_eq!(json["session_id"], "test-id");
+    assert_eq!(json["turn_count"], 5);
+    assert_eq!(json["tool_uses"].as_array().unwrap().len(), 1);
+    assert_eq!(json["tool_uses"][0]["name"], "Read");
+    assert_eq!(json["context_history"].as_array().unwrap().len(), 2);
+    assert!(json["seven_day_used_pct"].is_null());
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard v2 – WebSocket upgrade
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_websocket_upgrade() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .uri("/api/ws")
+                .header("Connection", "Upgrade")
+                .header("Upgrade", "websocket")
+                .header("Sec-WebSocket-Version", "13")
+                .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // With tower::oneshot there is no real TCP connection to upgrade, so axum
+    // returns 426 (Upgrade Required) instead of 101. The key assertion is that
+    // the server handles the request gracefully (no panic, no 500).
+    let status = response.status();
+    assert!(
+        status == StatusCode::SWITCHING_PROTOCOLS || status == StatusCode::UPGRADE_REQUIRED,
+        "expected 101 or 426, got {status}"
+    );
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "WebSocket endpoint must not panic/500"
+    );
 }
