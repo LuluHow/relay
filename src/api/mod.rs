@@ -19,6 +19,7 @@ use rust_embed::RustEmbed;
 use tower_http::cors::CorsLayer;
 
 use crate::config::Config;
+use crate::{hooks, statusline};
 use state::AppState;
 
 #[derive(RustEmbed)]
@@ -106,6 +107,10 @@ pub fn build_app(app_state: AppState) -> Router {
 
 /// Start the relay API server.
 pub async fn serve(config: Config, bind: String) -> Result<()> {
+    statusline::ensure_hook();
+    statusline::cleanup_stale();
+    hooks::ensure_hooks();
+
     let app_state = AppState::new(config);
 
     // Background task: refresh session data every 3 seconds
