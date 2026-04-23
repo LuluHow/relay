@@ -970,3 +970,294 @@ async fn test_websocket_upgrade() {
         "WebSocket endpoint must not panic/500"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard–Orchestration UI integration
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_dashboard_has_orchestration_ui() {
+    let response = app_no_auth()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&bytes);
+
+    assert!(body.contains("Plans"), "dashboard should have 'Plans' tab label");
+    assert!(
+        body.contains("/api/orchestrate"),
+        "dashboard JS should reference /api/orchestrate endpoint"
+    );
+    assert!(
+        body.contains("plan_toml"),
+        "dashboard should have plan_toml form field"
+    );
+    assert!(body.contains("Launch"), "dashboard should have Launch button");
+    assert!(body.contains("Abort"), "dashboard should have Abort button");
+}
+
+#[tokio::test]
+async fn test_orchestration_launch_valid_plan() {
+    let toml = r#"[plan]
+name = "test-plan"
+branch = "test-branch"
+
+[[tasks]]
+name = "hello"
+prompt = "echo hello"
+"#;
+    let body = serde_json::json!({ "plan_toml": toml }).to_string();
+
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    // Valid TOML is accepted; the endpoint returns 200 if setup succeeds,
+    // or 409 if the orchestrator can't set up (e.g. no git worktree support).
+    // Either way it must NOT panic (500).
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "valid plan must not cause a 500"
+    );
+    assert!(
+        status == StatusCode::OK || status == StatusCode::CONFLICT,
+        "expected 200 or 409, got {status}"
+    );
+
+    let json = json_body(response.into_body()).await;
+    if status == StatusCode::OK {
+        assert_eq!(json["plan_name"], "test-plan");
+        assert_eq!(json["status"], "started");
+    } else {
+        // 409 — meaningful error, not a raw panic trace
+        assert!(json["error"].is_string(), "409 should carry an error field");
+    }
+}
+
+#[tokio::test]
+async fn test_orchestration_launch_conflict() {
+    let state = AppState::new(Config::default());
+    let app = build_app(state);
+
+    let toml = r#"[plan]
+name = "conflict-plan"
+branch = "conflict-branch"
+
+[[tasks]]
+name = "t1"
+prompt = "echo t1"
+"#;
+    let body = serde_json::json!({ "plan_toml": toml }).to_string();
+
+    // First launch attempt
+    let resp1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.clone()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let first_status = resp1.status();
+    assert_ne!(first_status, StatusCode::INTERNAL_SERVER_ERROR);
+
+    // Only test conflict if the first launch actually succeeded
+    if first_status == StatusCode::OK {
+        let resp2 = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/orchestrate")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            resp2.status(),
+            StatusCode::CONFLICT,
+            "second launch while first is running should be 409"
+        );
+        let json = json_body(resp2.into_body()).await;
+        assert!(json["error"].is_string());
+    }
+}
+
+#[tokio::test]
+async fn test_orchestration_status_after_attempt() {
+    let state = AppState::new(Config::default());
+    let app = build_app(state);
+
+    let toml = r#"[plan]
+name = "status-plan"
+branch = "status-branch"
+
+[[tasks]]
+name = "s1"
+prompt = "echo s1"
+"#;
+    let body = serde_json::json!({ "plan_toml": toml }).to_string();
+
+    // Attempt to launch
+    let _ = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Check status
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/orchestrate/status")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "status endpoint must not panic"
+    );
+    assert!(
+        status == StatusCode::OK || status == StatusCode::NOT_FOUND,
+        "expected 200 or 404, got {status}"
+    );
+
+    let json = json_body(response.into_body()).await;
+    if status == StatusCode::OK {
+        // Verify proper JSON shape
+        assert!(json["plan_name"].is_string(), "missing plan_name");
+        assert!(json["state"].is_string(), "missing state");
+        assert!(json["tasks"].is_array(), "missing tasks array");
+    } else {
+        assert!(json["error"].is_string(), "404 should carry an error field");
+    }
+}
+
+#[tokio::test]
+async fn test_orchestration_abort_idempotent() {
+    let app = app_no_auth();
+
+    // First abort — nothing running → 404
+    let resp1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/abort")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let s1 = resp1.status();
+    assert!(
+        s1 == StatusCode::OK || s1 == StatusCode::NOT_FOUND,
+        "first abort: expected 200 or 404, got {s1}"
+    );
+    assert_ne!(s1, StatusCode::INTERNAL_SERVER_ERROR);
+
+    // Second abort — should also return cleanly
+    let resp2 = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/abort")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let s2 = resp2.status();
+    assert!(
+        s2 == StatusCode::OK || s2 == StatusCode::NOT_FOUND,
+        "second abort: expected 200 or 404, got {s2}"
+    );
+    assert_ne!(s2, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_all_orchestration_endpoints_return_json() {
+    let app = app_no_auth();
+
+    let toml = r#"[plan]
+name = "json-test"
+branch = "json-branch"
+
+[[tasks]]
+name = "j1"
+prompt = "echo j1"
+"#;
+    let plan_body = serde_json::json!({ "plan_toml": toml }).to_string();
+
+    let cases: Vec<(&str, &str, Body)> = vec![
+        ("POST", "/api/orchestrate", Body::from(plan_body)),
+        ("GET", "/api/orchestrate/status", Body::empty()),
+        ("POST", "/api/orchestrate/abort", Body::empty()),
+        ("POST", "/api/orchestrate/merge", Body::empty()),
+        ("POST", "/api/orchestrate/pr", Body::empty()),
+    ];
+
+    for (method, uri, body) in cases {
+        let mut builder = Request::builder().method(method).uri(uri);
+        if method == "POST" {
+            builder = builder.header(header::CONTENT_TYPE, "application/json");
+        }
+        let response = app
+            .clone()
+            .oneshot(builder.body(body).unwrap())
+            .await
+            .unwrap();
+
+        let status = response.status();
+        assert_ne!(
+            status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{method} {uri}: must not 500"
+        );
+
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .map(|v| v.to_str().unwrap_or(""))
+            .unwrap_or("");
+        assert!(
+            content_type.contains("application/json"),
+            "{method} {uri}: expected application/json, got '{content_type}'"
+        );
+    }
+}
