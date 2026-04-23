@@ -36,7 +36,7 @@ pub struct OrchestrationHandle {
     pub join_handle: tokio::task::JoinHandle<()>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionSnapshot {
     pub session_id: String,
     pub project_name: String,
@@ -73,14 +73,14 @@ pub struct SessionSnapshot {
     pub duration_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolUseSnapshot {
     pub name: String,
     pub input_summary: String,
     pub timestamp: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageSnapshot {
     pub content: String,
     pub timestamp: Option<String>,

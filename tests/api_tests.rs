@@ -1261,3 +1261,219 @@ prompt = "echo j1"
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Full API smoke test — hit every endpoint, verify no 500s
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_full_api_smoke() {
+    let state = AppState::new(Config::default());
+    let app = build_app(state);
+
+    // 1. GET /api/health → 200
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    // 2. GET /api/sessions → 200, is array
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/sessions").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let j = json_body(r.into_body()).await;
+    assert!(j.is_array());
+
+    // 3. GET /api/sessions/nonexistent → 404
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/sessions/nonexistent").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    // 4. GET /api/handoffs → 200, is array
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/handoffs").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let j = json_body(r.into_body()).await;
+    assert!(j.is_array());
+
+    // 5. GET /api/config → 200, has threshold
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let j = json_body(r.into_body()).await;
+    assert!(j["threshold"].is_number());
+
+    // 6. POST /api/config/toggle with auto_handoff → 200
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/config/toggle")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"key":"auto_handoff","value":true}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    // 7. GET /api/orchestrate/status → 404 (nothing running)
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/orchestrate/status").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    // 8. POST /api/orchestrate/abort → 404
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/abort")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    // 9. GET / → 200, text/html, contains "relay"
+    let r = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let ct = r.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    assert!(ct.contains("text/html"));
+    let bytes = r.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&bytes);
+    assert!(body.contains("relay"));
+
+    // 10. GET /favicon.svg → 200
+    let r = app
+        .oneshot(Request::builder().uri("/favicon.svg").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Enriched snapshot round-trip: serialize → JSON → deserialize → verify
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_enriched_snapshot_round_trip() {
+    let original = SessionSnapshot {
+        session_id: "rt-001".into(),
+        project_name: "round-trip-project".into(),
+        model: "claude-sonnet-4-20250514".into(),
+        git_branch: "feat/round-trip".into(),
+        state: "working".into(),
+        turn_count: 12,
+        context_pct: 67.5,
+        cost_usd: 2.45,
+        age_secs: 900,
+        files_touched: 5,
+        cwd: "/home/user/project".into(),
+        version: "0.3.0".into(),
+        tool_uses: vec![
+            ToolUseSnapshot {
+                name: "Edit".into(),
+                input_summary: "src/lib.rs".into(),
+                timestamp: Some("2026-04-23T10:00:00Z".into()),
+            },
+            ToolUseSnapshot {
+                name: "Bash".into(),
+                input_summary: "cargo test".into(),
+                timestamp: Some("2026-04-23T10:01:00Z".into()),
+            },
+        ],
+        files_touched_paths: vec![
+            "src/lib.rs".into(),
+            "src/main.rs".into(),
+            "tests/test.rs".into(),
+        ],
+        user_messages: vec![
+            MessageSnapshot {
+                content: "Fix the bug in parser".into(),
+                timestamp: Some("2026-04-23T09:55:00Z".into()),
+            },
+        ],
+        assistant_messages: vec![
+            MessageSnapshot {
+                content: "I'll look into the parser module".into(),
+                timestamp: Some("2026-04-23T09:55:01Z".into()),
+            },
+        ],
+        context_history: vec![1000, 2500, 5000, 8000],
+        compaction_count: 2,
+        total_input_tokens: 50000,
+        total_output_tokens: 30000,
+        total_cache_read: 1200,
+        total_cache_create: 800,
+        current_context_tokens: 45000,
+        lines_added: 120,
+        lines_removed: 35,
+        context_window_size: 200000,
+        five_hour_used_pct: Some(33.3),
+        five_hour_resets_at: Some(3600),
+        seven_day_used_pct: Some(12.5),
+        seven_day_resets_at: Some(86400),
+        duration_ms: 900000,
+    };
+
+    // Serialize to JSON string
+    let json_str = serde_json::to_string(&original).expect("serialize should succeed");
+
+    // Deserialize back
+    let restored: SessionSnapshot =
+        serde_json::from_str(&json_str).expect("deserialize should succeed");
+
+    // Verify key fields survived the round trip
+    assert_eq!(restored.session_id, "rt-001");
+    assert_eq!(restored.project_name, "round-trip-project");
+    assert_eq!(restored.model, "claude-sonnet-4-20250514");
+    assert_eq!(restored.git_branch, "feat/round-trip");
+    assert_eq!(restored.state, "working");
+    assert_eq!(restored.turn_count, 12);
+    assert!((restored.context_pct - 67.5).abs() < 0.01);
+    assert!((restored.cost_usd - 2.45).abs() < 0.01);
+    assert_eq!(restored.age_secs, 900);
+    assert_eq!(restored.files_touched, 5);
+    assert_eq!(restored.cwd, "/home/user/project");
+    assert_eq!(restored.tool_uses.len(), 2);
+    assert_eq!(restored.tool_uses[0].name, "Edit");
+    assert_eq!(restored.tool_uses[1].name, "Bash");
+    assert_eq!(restored.files_touched_paths.len(), 3);
+    assert_eq!(restored.user_messages.len(), 1);
+    assert_eq!(restored.user_messages[0].content, "Fix the bug in parser");
+    assert_eq!(restored.assistant_messages.len(), 1);
+    assert_eq!(restored.context_history, vec![1000, 2500, 5000, 8000]);
+    assert_eq!(restored.compaction_count, 2);
+    assert_eq!(restored.total_input_tokens, 50000);
+    assert_eq!(restored.total_output_tokens, 30000);
+    assert_eq!(restored.lines_added, 120);
+    assert_eq!(restored.lines_removed, 35);
+    assert_eq!(restored.context_window_size, 200000);
+    assert_eq!(restored.five_hour_used_pct, Some(33.3));
+    assert_eq!(restored.seven_day_used_pct, Some(12.5));
+    assert_eq!(restored.duration_ms, 900000);
+}
