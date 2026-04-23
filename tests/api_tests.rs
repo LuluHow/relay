@@ -493,6 +493,200 @@ async fn test_config_toggle_invalid_key() {
     assert!(json["error"].is_string());
 }
 
+// ---------------------------------------------------------------------------
+// Orchestration
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_orchestration_status_none() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .uri("/api/orchestrate/status")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_abort_none() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/abort")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_merge_none() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/merge")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_pr_none() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate/pr")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_start_invalid_toml() {
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"plan_toml": "invalid toml {{{}}"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].as_str().unwrap().contains("invalid plan TOML"));
+}
+
+#[tokio::test]
+async fn test_orchestration_start_empty_plan() {
+    // Valid TOML structure but missing required `tasks` field
+    let toml = r#"[plan]
+name = "empty"
+branch = "test-empty"
+on_complete = "manual"
+"#;
+    let body = serde_json::json!({ "plan_toml": toml }).to_string();
+
+    let response = app_no_auth()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_auth_required() {
+    let app = app_with_token("orch-secret");
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/orchestrate")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"plan_toml": "x"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let json = json_body(response.into_body()).await;
+    assert!(json["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_orchestration_endpoints_shape() {
+    let app = app_no_auth();
+
+    // All orchestration endpoints should return JSON with an "error" field, not HTML
+    let endpoints: Vec<(&str, &str)> = vec![
+        ("GET", "/api/orchestrate/status"),
+        ("POST", "/api/orchestrate/abort"),
+        ("POST", "/api/orchestrate/merge"),
+        ("POST", "/api/orchestrate/pr"),
+    ];
+
+    for (method, uri) in endpoints {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let status = response.status();
+        assert!(
+            status == StatusCode::NOT_FOUND || status == StatusCode::BAD_REQUEST,
+            "{method} {uri}: unexpected status {status}"
+        );
+
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .map(|v| v.to_str().unwrap_or(""))
+            .unwrap_or("");
+        assert!(
+            content_type.contains("application/json"),
+            "{method} {uri}: expected JSON content-type, got '{content_type}'"
+        );
+
+        let json = json_body(response.into_body()).await;
+        assert!(
+            json["error"].is_string(),
+            "{method} {uri}: response missing 'error' field"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Config toggle
+// ---------------------------------------------------------------------------
+
 #[tokio::test]
 async fn test_config_toggle_auth() {
     let app = app_with_token("toggle-secret");
