@@ -587,7 +587,10 @@ async fn test_orchestration_start_invalid_toml() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let json = json_body(response.into_body()).await;
-    assert!(json["error"].as_str().unwrap().contains("invalid plan TOML"));
+    assert!(json["error"]
+        .as_str()
+        .unwrap()
+        .contains("invalid plan TOML"));
 }
 
 #[tokio::test]
@@ -995,7 +998,10 @@ async fn test_dashboard_has_orchestration_ui() {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body = String::from_utf8_lossy(&bytes);
 
-    assert!(body.contains("Plans"), "dashboard should have 'Plans' tab label");
+    assert!(
+        body.contains("Plans"),
+        "dashboard should have 'Plans' tab label"
+    );
     assert!(
         body.contains("/api/orchestrate"),
         "dashboard JS should reference /api/orchestrate endpoint"
@@ -1004,7 +1010,10 @@ async fn test_dashboard_has_orchestration_ui() {
         body.contains("plan_toml"),
         "dashboard should have plan_toml form field"
     );
-    assert!(body.contains("Launch"), "dashboard should have Launch button");
+    assert!(
+        body.contains("Launch"),
+        "dashboard should have Launch button"
+    );
     assert!(body.contains("Abort"), "dashboard should have Abort button");
 }
 
@@ -1282,7 +1291,12 @@ async fn test_full_api_smoke() {
     // 1. GET /api/health → 200
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
@@ -1290,7 +1304,12 @@ async fn test_full_api_smoke() {
     // 2. GET /api/sessions → 200, is array
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/sessions").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
@@ -1300,7 +1319,12 @@ async fn test_full_api_smoke() {
     // 3. GET /api/sessions/nonexistent → 404
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/sessions/nonexistent").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions/nonexistent")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::NOT_FOUND);
@@ -1308,7 +1332,12 @@ async fn test_full_api_smoke() {
     // 4. GET /api/handoffs → 200, is array
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/handoffs").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/handoffs")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
@@ -1318,7 +1347,12 @@ async fn test_full_api_smoke() {
     // 5. GET /api/config → 200, has threshold
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
@@ -1343,7 +1377,12 @@ async fn test_full_api_smoke() {
     // 7. GET /api/orchestrate/status → 404 (nothing running)
     let r = app
         .clone()
-        .oneshot(Request::builder().uri("/api/orchestrate/status").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/orchestrate/status")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::NOT_FOUND);
@@ -1369,7 +1408,13 @@ async fn test_full_api_smoke() {
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
-    let ct = r.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    let ct = r
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     assert!(ct.contains("text/html"));
     let bytes = r.into_body().collect().await.unwrap().to_bytes();
     let body = String::from_utf8_lossy(&bytes);
@@ -1377,7 +1422,12 @@ async fn test_full_api_smoke() {
 
     // 10. GET /favicon.svg → 200
     let r = app
-        .oneshot(Request::builder().uri("/favicon.svg").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
@@ -1438,18 +1488,14 @@ async fn test_enriched_snapshot_round_trip() {
             "src/main.rs".into(),
             "tests/test.rs".into(),
         ],
-        user_messages: vec![
-            MessageSnapshot {
-                content: "Fix the bug in parser".into(),
-                timestamp: Some("2026-04-23T09:55:00Z".into()),
-            },
-        ],
-        assistant_messages: vec![
-            MessageSnapshot {
-                content: "I'll look into the parser module".into(),
-                timestamp: Some("2026-04-23T09:55:01Z".into()),
-            },
-        ],
+        user_messages: vec![MessageSnapshot {
+            content: "Fix the bug in parser".into(),
+            timestamp: Some("2026-04-23T09:55:00Z".into()),
+        }],
+        assistant_messages: vec![MessageSnapshot {
+            content: "I'll look into the parser module".into(),
+            timestamp: Some("2026-04-23T09:55:01Z".into()),
+        }],
         context_history: vec![1000, 2500, 5000, 8000],
     };
 

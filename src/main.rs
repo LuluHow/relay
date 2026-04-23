@@ -163,7 +163,11 @@ fn main() -> Result<()> {
             }
             // CLI args override config, but fall back to config values
             // when the user didn't explicitly pass --bind or --port
-            let effective_bind = if bind == "127.0.0.1" { &cfg.api_bind } else { &bind };
+            let effective_bind = if bind == "127.0.0.1" {
+                &cfg.api_bind
+            } else {
+                &bind
+            };
             let effective_port = if port == 4747 { cfg.api_port } else { port };
             let addr = format!("{effective_bind}:{effective_port}");
             if cfg.api_token.is_some() {

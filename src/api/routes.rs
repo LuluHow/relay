@@ -174,7 +174,9 @@ pub async fn get_session(State(state): State<AppState>, Path(id): Path<String>) 
     let id_clone = id.clone();
     let result = tokio::task::spawn_blocking(move || {
         let sessions_info = session::discover_sessions_since(86400).unwrap_or_default();
-        let info = sessions_info.into_iter().find(|s| s.session_id == id_clone)?;
+        let info = sessions_info
+            .into_iter()
+            .find(|s| s.session_id == id_clone)?;
         parser::parse_session(&info).ok()
     })
     .await;
@@ -440,7 +442,9 @@ pub async fn start_orchestration(
     let project_root = req
         .project_root
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        });
 
     let plan_name = plan.plan.name.clone();
 
@@ -450,11 +454,7 @@ pub async fn start_orchestration(
             "plan_name": plan_name,
         }))
         .into_response(),
-        Err(e) => (
-            StatusCode::CONFLICT,
-            Json(DynErrorResponse { error: e }),
-        )
-            .into_response(),
+        Err(e) => (StatusCode::CONFLICT, Json(DynErrorResponse { error: e })).into_response(),
     }
 }
 
@@ -488,22 +488,14 @@ pub async fn abort_orchestration(State(state): State<AppState>) -> Response {
 pub async fn merge_orchestration(State(state): State<AppState>) -> Response {
     match state.merge_orchestration().await {
         Ok(msg) => Json(serde_json::json!({ "status": msg })).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(DynErrorResponse { error: e }),
-        )
-            .into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),
     }
 }
 
 pub async fn create_orchestration_pr(State(state): State<AppState>) -> Response {
     match state.pr_orchestration().await {
         Ok(url) => Json(serde_json::json!({ "status": "created", "url": url })).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(DynErrorResponse { error: e }),
-        )
-            .into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),
     }
 }
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::config::Config;
-use crate::orchestrator::{Orchestrator, OrchestrationSnapshot, Plan};
+use crate::orchestrator::{OrchestrationSnapshot, Orchestrator, Plan};
 use crate::parser;
 use crate::session;
 use crate::statusline;
@@ -311,9 +311,12 @@ impl AppState {
                 let done = {
                     let orch_ref = Arc::clone(&orch_tick);
                     match tokio::task::spawn_blocking(move || {
-                        let mut o = orch_ref.lock().map_err(|e| {
-                            eprintln!("[relay] orchestrator lock poisoned: {e}");
-                        }).ok()?;
+                        let mut o = orch_ref
+                            .lock()
+                            .map_err(|e| {
+                                eprintln!("[relay] orchestrator lock poisoned: {e}");
+                            })
+                            .ok()?;
                         Some(o.tick())
                     })
                     .await
@@ -388,28 +391,16 @@ impl AppState {
     /// Merge the orchestration branch.
     pub async fn merge_orchestration(&self) -> Result<String, String> {
         let inner = self.inner.read().await;
-        let handle = inner
-            .orchestrator
-            .as_ref()
-            .ok_or("no orchestration")?;
-        let orch = handle
-            .orchestrator
-            .lock()
-            .map_err(|e| e.to_string())?;
+        let handle = inner.orchestrator.as_ref().ok_or("no orchestration")?;
+        let orch = handle.orchestrator.lock().map_err(|e| e.to_string())?;
         orch.merge_branch()
     }
 
     /// Create a PR for the orchestration branch.
     pub async fn pr_orchestration(&self) -> Result<String, String> {
         let inner = self.inner.read().await;
-        let handle = inner
-            .orchestrator
-            .as_ref()
-            .ok_or("no orchestration")?;
-        let orch = handle
-            .orchestrator
-            .lock()
-            .map_err(|e| e.to_string())?;
+        let handle = inner.orchestrator.as_ref().ok_or("no orchestration")?;
+        let orch = handle.orchestrator.lock().map_err(|e| e.to_string())?;
         orch.create_pull_request()
     }
 }
