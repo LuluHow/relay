@@ -529,9 +529,130 @@
     /* ── Plans view ── */
     .plans-view {
       display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .plans-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .plans-sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .plans-sidebar .col-title {
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .plans-sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .plan-history-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .plan-history-item:hover { background: var(--bg-alt); }
+    .plan-history-item.selected {
+      background: var(--sel-bg);
+      border-left: 2px solid var(--green);
+      padding-left: 10px;
+    }
+
+    .plan-history-item .phi-name {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .plan-history-item .phi-meta {
+      font-size: 10px;
+      color: var(--dim);
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .plan-history-item .phi-state { font-size: 10px; }
+
+    .plans-main {
+      display: flex;
       flex-direction: column;
       overflow-y: auto;
       flex: 1;
+    }
+
+    .btn-new-plan {
+      margin: 8px 12px;
+      padding: 5px 0;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-new-plan:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .new-project-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .new-project-row select,
+    .new-project-row input {
+      flex: 1;
+    }
+    .new-project-row input {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .new-project-row input:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+    .new-project-row select {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      max-width: 200px;
     }
 
     .plan-launch {
@@ -1188,11 +1309,14 @@
     const expandedTasks = new Set();
     let orchPrUrl = null;
     let projects = [];
+    let planHistory = [];
+    let selectedHistoryId = null;
     let planMode = 'wizard'; // 'wizard' or 'toml'
     let wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
-    let wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: false, project: '' };
+    let wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: true, project: '' };
     let configAutoHandoff = false;
     let configAutoCommit = false;
+    let configWorkspaces = [];
     let serverUptime = null;
     let uptimeFetchedAt = null;
 
@@ -1698,7 +1822,7 @@
       });
       document.getElementById('sessions-view').style.display = tab === 'sessions' ? 'grid' : 'none';
       document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
-      document.getElementById('plans-view').style.display = tab === 'plans' ? 'flex' : 'none';
+      document.getElementById('plans-view').style.display = tab === 'plans' ? 'block' : 'none';
       if (tab === 'handoffs') renderHandoffs();
       if (tab === 'plans') renderOrchestration(true);
     }
@@ -1869,32 +1993,153 @@
 
     function renderOrchestration(force) {
       const view = document.getElementById('plans-view');
-      const shouldMonitor = !!(orchestrationState && orchestrationState.plan_name);
-      const nextMode = shouldMonitor ? 'monitor' : 'launch';
 
-      // Don't rebuild the launch/wizard form if already showing it
-      if (!force && nextMode === 'launch' && orchViewMode === 'launch') return;
+      // Build the two-panel layout
+      let html = '<div class="plans-layout">';
 
-      orchViewMode = nextMode;
-      if (shouldMonitor) {
-        renderOrchMonitor(view);
+      // Left sidebar: history
+      html += '<div class="plans-sidebar">';
+      html += '<div class="col-title">History</div>';
+      html += '<button class="btn-new-plan" onclick="showNewPlan()">+ New Plan</button>';
+      html += '<div class="plans-sidebar-body">';
+
+      // Active orchestration at top (if any)
+      const hasActive = !!(orchestrationState && orchestrationState.plan_name);
+      if (hasActive) {
+        const s = orchestrationState;
+        const stCol = orchStateColor(s.state);
+        const isSelected = !selectedHistoryId && !orchDismissed;
+        html += '<div class="plan-history-item' + (isSelected ? ' selected' : '') + '" onclick="selectActivePlan()">'
+          + '<div class="phi-name">' + esc(s.plan_name) + '</div>'
+          + '<div class="phi-meta">'
+          + '<span class="phi-state" style="color:' + stCol + '">' + esc(s.state) + '</span>'
+          + '<span>' + fmtElapsed(s.elapsed_secs || 0) + '</span>'
+          + '</div></div>';
+      }
+
+      // Historical entries (skip active plan to avoid duplicates)
+      const activeName = hasActive ? orchestrationState.plan_name : null;
+      for (const h of planHistory) {
+        if (activeName && h.plan_name === activeName) continue;
+        const isSelected = selectedHistoryId === h.id;
+        const stCol = orchStateColor(h.state);
+        const date = h.completed_at ? h.completed_at.slice(0, 10) : '';
+        html += '<div class="plan-history-item' + (isSelected ? ' selected' : '') + '" onclick="selectHistoryPlan(\'' + esc(h.id) + '\')">'
+          + '<div class="phi-name">' + esc(h.plan_name) + '</div>'
+          + '<div class="phi-meta">'
+          + '<span class="phi-state" style="color:' + stCol + '">' + esc(h.state) + '</span>'
+          + '<span>' + esc(h.done_count + '/' + h.task_count) + '</span>'
+          + '<span>' + esc(date) + '</span>'
+          + '</div></div>';
+      }
+
+      if (!planHistory.length && !hasActive) {
+        html += '<div class="empty" style="padding:12px;font-size:11px">No plan history</div>';
+      }
+
+      html += '</div></div>'; // close sidebar-body + sidebar
+
+      // Right main area
+      html += '<div class="plans-main">';
+
+      if (selectedHistoryId) {
+        html += '<div id="history-detail"><div class="empty">Loading\u2026</div></div>';
+      } else if (hasActive && !orchDismissed) {
+        html += renderOrchMonitorHtml();
       } else {
-        renderOrchLaunch(view);
+        html += renderOrchLaunchHtml();
+      }
+
+      html += '</div>'; // close main
+      html += '</div>'; // close layout
+
+      view.innerHTML = html;
+
+      // If viewing history detail, fetch it
+      if (selectedHistoryId) {
+        fetchHistoryDetail(selectedHistoryId);
       }
     }
 
+    function showNewPlan() {
+      selectedHistoryId = null;
+      orchDismissed = true;
+      renderOrchestration(true);
+    }
+
+    function selectActivePlan() {
+      selectedHistoryId = null;
+      orchDismissed = false;
+      renderOrchestration(true);
+    }
+
+    function selectHistoryPlan(id) {
+      selectedHistoryId = id;
+      renderOrchestration(true);
+    }
+
+    async function fetchHistoryDetail(id) {
+      try {
+        const res = await fetch('/api/plans/history/' + encodeURIComponent(id));
+        if (res.ok) {
+          const snapshot = await res.json();
+          const container = document.getElementById('history-detail');
+          if (container) {
+            container.innerHTML = renderOrchMonitorHtml(snapshot, true);
+          }
+        }
+      } catch (_) {}
+    }
+
     function projectOptions(selected) {
-      let opts = '<option value=""' + (!selected ? ' selected' : '') + '>server cwd (default)</option>';
+      let opts = '<option value=""' + (!selected || selected === '__new__' ? '' : ' selected') + '>server cwd (default)</option>';
       for (const p of projects) {
         const sel = selected === p.project_path ? ' selected' : '';
         opts += '<option value="' + esc(p.project_path) + '"' + sel + '>'
           + esc(p.project_name) + ' \u2014 ' + esc(p.project_path)
-          + ' (' + p.session_count + ')</option>';
+          + (p.session_count ? ' (' + p.session_count + ')' : '') + '</option>';
       }
+      opts += '<option value="__new__"' + (selected === '__new__' ? ' selected' : '') + '>\u2795 New project\u2026</option>';
       return opts;
     }
 
-    function renderOrchLaunch(view) {
+    function renderNewProjectInput() {
+      if (configWorkspaces.length > 0) {
+        let wsOpts = '';
+        for (const w of configWorkspaces) {
+          wsOpts += '<option value="' + esc(w) + '">' + esc(w) + '</option>';
+        }
+        return '<div class="new-project-row">'
+          + '<select id="wz-new-ws">' + wsOpts + '</select>'
+          + '<span style="color:var(--dim)">/</span>'
+          + '<input id="wz-new-name" placeholder="project-name">'
+          + '</div>';
+      }
+      return '<div class="new-project-row">'
+        + '<input id="wz-new-path" placeholder="/absolute/path/to/new/project" style="flex:1">'
+        + '</div>';
+    }
+
+    function getNewProjectPath() {
+      if (configWorkspaces.length > 0) {
+        const ws = (document.getElementById('wz-new-ws') || {}).value || '';
+        const name = (document.getElementById('wz-new-name') || {}).value || '';
+        if (!ws || !name.trim()) return null;
+        return ws.replace(/\/$/, '') + '/' + name.trim();
+      }
+      const path = (document.getElementById('wz-new-path') || {}).value || '';
+      return path.trim() || null;
+    }
+
+    function onProjectChange() {
+      const sel = document.getElementById('plan-project');
+      const area = document.getElementById('new-project-area');
+      if (sel && area) {
+        area.innerHTML = sel.value === '__new__' ? renderNewProjectInput() : '';
+      }
+    }
+
+    function renderOrchLaunchHtml() {
       const modeW = planMode === 'wizard' ? ' active' : '';
       const modeT = planMode === 'toml' ? ' active' : '';
 
@@ -1916,7 +2161,7 @@
       }
 
       html += '</div>';
-      view.innerHTML = html;
+      return html;
     }
 
     function setPlanMode(mode) {
@@ -1971,7 +2216,8 @@
         + '<div class="field-group"><label>On complete</label>'
         + '<select id="wz-oncomplete"><option value="manual"' + ocSel('manual') + '>manual</option><option value="merge"' + ocSel('merge') + '>merge</option><option value="pr"' + ocSel('pr') + '>pr</option></select></div>'
         + '</div>'
-        + '<div class="field-group"><label>Project</label><select id="plan-project">' + projectOptions(wp.project) + '</select></div>'
+        + '<div class="field-group"><label>Project</label><select id="plan-project" onchange="onProjectChange()">' + projectOptions(wp.project) + '</select></div>'
+        + '<div id="new-project-area">' + (wp.project === '__new__' ? renderNewProjectInput() : '') + '</div>'
         + '<div class="wizard-toggle-row">'
         + '<input type="checkbox" id="wz-skip-perms"' + (wp.skip_permissions ? ' checked' : '') + '><label for="wz-skip-perms">Skip permission checks</label>'
         + '</div>';
@@ -2069,7 +2315,11 @@
       errEl.textContent = '';
 
       const body = { plan_toml: result.toml };
-      if (projectSelect && projectSelect.value) {
+      if (projectSelect && projectSelect.value === '__new__') {
+        const newPath = getNewProjectPath();
+        if (!newPath) { errEl.textContent = 'Enter a path for the new project'; btn.classList.remove('loading'); btn.textContent = 'Launch'; return; }
+        body.project_root = newPath;
+      } else if (projectSelect && projectSelect.value) {
         body.project_root = projectSelect.value;
       }
 
@@ -2100,8 +2350,9 @@
       }
     }
 
-    function renderOrchMonitor(view) {
-      const s = orchestrationState;
+    function renderOrchMonitorHtml(snapshotOverride, readOnly) {
+      const s = snapshotOverride || orchestrationState;
+      if (!s) return '<div class="empty">No orchestration data</div>';
       const stateCol = orchStateColor(s.state);
       const counts = s.counts || {};
 
@@ -2163,25 +2414,28 @@
       }
       html += '</div>';
 
-      // Action bar
-      html += '<div class="plan-actions">';
-      const st = s.state || '';
-      if (st === 'running') {
-        html += '<button class="btn-plan abort" onclick="orchAbort(this)">Abort</button>';
+      // Action bar (omit for read-only / historical views)
+      if (!readOnly) {
+        html += '<div class="plan-actions">';
+        const st = s.state || '';
+        if (st === 'running') {
+          html += '<button class="btn-plan abort" onclick="orchAbort(this)">Abort</button>';
+        }
+        if (st === 'completed') {
+          html += '<button class="btn-plan merge" onclick="orchMerge(this)">Merge</button>';
+          html += '<button class="btn-plan pr" onclick="orchPr(this)">Create PR</button>';
+        }
+        if (st === 'completed' || st === 'failed' || st === 'aborted') {
+          html += '<button class="btn-plan newplan" onclick="orchReset()">New Plan</button>';
+        }
+        if (orchPrUrl) {
+          html += '<span class="pr-url"><a href="' + esc(orchPrUrl) + '" target="_blank">' + esc(orchPrUrl) + '</a></span>';
+        }
+        html += '</div>';
       }
-      if (st === 'completed') {
-        html += '<button class="btn-plan merge" onclick="orchMerge(this)">Merge</button>';
-        html += '<button class="btn-plan pr" onclick="orchPr(this)">Create PR</button>';
-      }
-      if (st === 'completed' || st === 'failed' || st === 'aborted') {
-        html += '<button class="btn-plan newplan" onclick="orchReset()">New Plan</button>';
-      }
-      if (orchPrUrl) {
-        html += '<span class="pr-url"><a href="' + esc(orchPrUrl) + '" target="_blank">' + esc(orchPrUrl) + '</a></span>';
-      }
-      html += '</div></div>';
 
-      view.innerHTML = html;
+      html += '</div>';
+      return html;
     }
 
     function toggleTask(name) {
@@ -2203,7 +2457,7 @@
       errEl.textContent = '';
 
       const body = { plan_toml: toml };
-      if (projectSelect && projectSelect.value) {
+      if (projectSelect && projectSelect.value && projectSelect.value !== '__new__') {
         body.project_root = projectSelect.value;
       }
 
@@ -2285,6 +2539,7 @@
       orchPrUrl = null;
       orchDismissed = true;
       expandedTasks.clear();
+      fetchPlanHistory();
       renderOrchestration(true);
     }
 
@@ -2292,6 +2547,13 @@
       try {
         const res = await fetch('/api/projects');
         if (res.ok) projects = await res.json();
+      } catch (_) {}
+    }
+
+    async function fetchPlanHistory() {
+      try {
+        const res = await fetch('/api/plans/history');
+        if (res.ok) planHistory = await res.json();
       } catch (_) {}
     }
 
@@ -2367,6 +2629,7 @@
           const data = await res.json();
           if (data.auto_handoff != null) configAutoHandoff = data.auto_handoff;
           if (data.auto_commit != null) configAutoCommit = data.auto_commit;
+          if (data.workspaces) configWorkspaces = data.workspaces;
           renderConfigToggles();
         }
       } catch (_) {}
@@ -2451,7 +2714,7 @@
     // ── Init ──
     (async () => {
       await fetchVersion();
-      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects()]);
+      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects(), fetchPlanHistory()]);
       connectWs();
       startOrchPoll();
       checkNotifPermission();

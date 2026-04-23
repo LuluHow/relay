@@ -343,6 +343,21 @@ impl AppState {
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
+
+            // Save history + cleanup worktree after loop ends
+            {
+                let orch_ref = Arc::clone(&orch_tick);
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Ok(o) = orch_ref.lock() {
+                        let snapshot = o.snapshot();
+                        if let Err(e) = crate::orchestrator::save_plan_history(&snapshot) {
+                            eprintln!("[relay] failed to save plan history: {e}");
+                        }
+                        o.cleanup_worktree();
+                    }
+                })
+                .await;
+            }
         });
 
         inner.orchestrator = Some(OrchestrationHandle {

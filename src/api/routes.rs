@@ -63,6 +63,7 @@ pub struct ConfigResponse {
     api_port: u16,
     api_bind: String,
     api_token: Option<String>,
+    workspaces: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -89,18 +90,54 @@ pub struct ProjectResponse {
     pub session_count: usize,
 }
 
-pub async fn list_projects() -> Json<Vec<ProjectResponse>> {
-    let projects = session::discover_projects().unwrap_or_default();
-    Json(
-        projects
-            .into_iter()
-            .map(|p| ProjectResponse {
-                project_path: p.project_path,
-                project_name: p.project_name,
-                session_count: p.session_count,
-            })
-            .collect(),
-    )
+pub async fn list_projects(State(state): State<AppState>) -> Json<Vec<ProjectResponse>> {
+    let config = state.config().await;
+
+    if config.workspaces.is_empty() {
+        // Fallback: discover from Claude Code's internal project data
+        let projects = session::discover_projects().unwrap_or_default();
+        return Json(
+            projects
+                .into_iter()
+                .map(|p| ProjectResponse {
+                    project_path: p.project_path,
+                    project_name: p.project_name,
+                    session_count: p.session_count,
+                })
+                .collect(),
+        );
+    }
+
+    // Scan configured workspace directories for real project folders
+    let mut results = Vec::new();
+    for ws in &config.workspaces {
+        let ws_path = std::path::Path::new(ws);
+        if !ws_path.is_dir() {
+            continue;
+        }
+        let entries = match std::fs::read_dir(ws_path) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            // Skip hidden directories and worktree dirs
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || name == "worktrees" {
+                continue;
+            }
+            results.push(ProjectResponse {
+                project_path: path.to_string_lossy().to_string(),
+                project_name: name,
+                session_count: 0,
+            });
+        }
+    }
+    results.sort_by(|a, b| a.project_name.cmp(&b.project_name));
+    Json(results)
 }
 
 pub async fn list_sessions(
@@ -250,6 +287,7 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
         api_port: c.api_port,
         api_bind: c.api_bind,
         api_token: c.api_token.map(|_| "***".to_string()),
+        workspaces: c.workspaces,
     })
 }
 
@@ -405,6 +443,61 @@ pub async fn create_orchestration_pr(State(state): State<AppState>) -> Response 
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(DynErrorResponse { error: e }),
+        )
+            .into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Plan history handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct PlanHistoryResponse {
+    pub id: String,
+    pub plan_name: String,
+    pub state: String,
+    pub task_count: usize,
+    pub done_count: usize,
+    pub failed_count: usize,
+    pub elapsed_secs: u64,
+    pub completed_at: String,
+}
+
+pub async fn list_plan_history() -> Json<Vec<PlanHistoryResponse>> {
+    let entries = orchestrator::list_plan_history().unwrap_or_default();
+    Json(
+        entries
+            .into_iter()
+            .map(|e| PlanHistoryResponse {
+                id: e.id,
+                plan_name: e.plan_name,
+                state: e.state,
+                task_count: e.task_count,
+                done_count: e.done_count,
+                failed_count: e.failed_count,
+                elapsed_secs: e.elapsed_secs,
+                completed_at: e.completed_at,
+            })
+            .collect(),
+    )
+}
+
+pub async fn get_plan_history(Path(id): Path<String>) -> Response {
+    match orchestrator::get_plan_history(&id) {
+        Ok(Some(entry)) => Json(entry.snapshot).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "plan not found",
+            }),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(DynErrorResponse {
+                error: e.to_string(),
+            }),
         )
             .into_response(),
     }

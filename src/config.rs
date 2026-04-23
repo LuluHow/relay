@@ -36,6 +36,11 @@ pub struct Config {
     pub api_bind: String,
     /// API bearer token for authentication (default: none)
     pub api_token: Option<String>,
+    /// Workspace directories for project filtering in the plan wizard.
+    /// Only projects within these directories will appear in the dropdown.
+    /// If empty, all discovered projects are shown.
+    #[serde(default)]
+    pub workspaces: Vec<String>,
 }
 
 impl Default for Config {
@@ -56,6 +61,7 @@ impl Default for Config {
             api_port: 4747,
             api_bind: "127.0.0.1".to_string(),
             api_token: None,
+            workspaces: Vec::new(),
         }
     }
 }
@@ -103,6 +109,11 @@ sound = true
 # Slack webhook URL for handoff notifications (optional)
 # Create one at: https://api.slack.com/messaging/webhooks
 # slack_webhook = \"https://hooks.slack.com/services/...\"
+
+# Workspace directories for the plan wizard project selector
+# Only projects within these directories will appear in the dropdown
+# If empty, all discovered projects are shown
+# workspaces = [\"/Users/me/projects\", \"/Users/me/work\"]
 
 # API server
 # api_port = 4747

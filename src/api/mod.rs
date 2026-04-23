@@ -72,6 +72,8 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/orchestrate/abort", post(routes::abort_orchestration))
         .route("/api/orchestrate/merge", post(routes::merge_orchestration))
         .route("/api/orchestrate/pr", post(routes::create_orchestration_pr))
+        .route("/api/plans/history", get(routes::list_plan_history))
+        .route("/api/plans/history/{id}", get(routes::get_plan_history))
         .route("/api/ws", get(ws::handler))
         .fallback(static_handler)
         .layer(middleware::from_fn_with_state(

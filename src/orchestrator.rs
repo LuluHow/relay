@@ -29,9 +29,10 @@ pub struct PlanMeta {
     pub on_complete: String,
     #[serde(default = "default_branch")]
     pub branch: String,
-    /// Skip all permission checks in spawned claude sessions (default: false).
-    /// WARNING: This allows arbitrary code execution from the plan's prompts.
-    #[serde(default)]
+    /// Skip all permission checks in spawned claude sessions (default: true).
+    /// Required for non-interactive orchestration — Claude cannot prompt for
+    /// approval when stdin is not connected.
+    #[serde(default = "default_skip_permissions")]
     pub skip_permissions: bool,
 }
 
@@ -41,6 +42,10 @@ fn default_on_complete() -> String {
 
 fn default_branch() -> String {
     "orchestrate".to_string()
+}
+
+fn default_skip_permissions() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -98,7 +103,7 @@ pub struct TaskState {
     pub finished_at: Option<Instant>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskSnapshot {
     pub name: String,
     pub status: String,
@@ -108,7 +113,7 @@ pub struct TaskSnapshot {
     pub elapsed_secs: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationSnapshot {
     pub plan_name: String,
     pub branch: String,
@@ -118,7 +123,7 @@ pub struct OrchestrationSnapshot {
     pub counts: OrchestrationCounts,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationCounts {
     pub pending: usize,
     pub blocked: usize,
@@ -297,7 +302,48 @@ impl Orchestrator {
     }
 
     /// Create the shared worktree and branch. Must be called before tick().
+    /// If the project directory doesn't exist it is created.
+    /// If it has no git repo, `git init` + an initial commit are run automatically.
     pub fn setup(&mut self) -> Result<()> {
+        // Ensure the project directory exists
+        if !self.project_root.exists() {
+            std::fs::create_dir_all(&self.project_root)
+                .context("Failed to create project directory")?;
+        }
+
+        // Initialise git if needed
+        let git_dir = self.project_root.join(".git");
+        if !git_dir.exists() {
+            let init = Command::new("git")
+                .args(["init"])
+                .current_dir(&self.project_root)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output()
+                .context("Failed to run git init")?;
+            if !init.status.success() {
+                bail!(
+                    "git init failed: {}",
+                    String::from_utf8_lossy(&init.stderr).trim()
+                );
+            }
+
+            // Worktree requires at least one commit
+            let commit = Command::new("git")
+                .args(["commit", "--allow-empty", "-m", "init"])
+                .current_dir(&self.project_root)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output()
+                .context("Failed to create initial commit")?;
+            if !commit.status.success() {
+                bail!(
+                    "initial commit failed: {}",
+                    String::from_utf8_lossy(&commit.stderr).trim()
+                );
+            }
+        }
+
         let worktree_dir = self
             .project_root
             .join(".worktrees")
@@ -1136,6 +1182,81 @@ pub fn create_plan_interactive(output_path: &Path) -> Result<()> {
     );
 
     Ok(())
+}
+
+// ── Plan history persistence ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanHistoryEntry {
+    pub id: String,
+    pub plan_name: String,
+    pub branch: String,
+    pub state: String,
+    pub task_count: usize,
+    pub done_count: usize,
+    pub failed_count: usize,
+    pub elapsed_secs: u64,
+    pub completed_at: String,
+    pub snapshot: OrchestrationSnapshot,
+}
+
+fn plans_dir() -> Result<PathBuf> {
+    let dir = dirs::home_dir()
+        .context("No home directory")?
+        .join(".relay")
+        .join("plans");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+pub fn save_plan_history(snapshot: &OrchestrationSnapshot) -> Result<String> {
+    let dir = plans_dir()?;
+    let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let id = format!("{ts}_{}", snapshot.plan_name);
+    let entry = PlanHistoryEntry {
+        id: id.clone(),
+        plan_name: snapshot.plan_name.clone(),
+        branch: snapshot.branch.clone(),
+        state: snapshot.state.clone(),
+        task_count: snapshot.tasks.len(),
+        done_count: snapshot.counts.done,
+        failed_count: snapshot.counts.failed,
+        elapsed_secs: snapshot.elapsed_secs,
+        completed_at: chrono::Utc::now().to_rfc3339(),
+        snapshot: snapshot.clone(),
+    };
+    let json = serde_json::to_string_pretty(&entry)?;
+    let path = dir.join(format!("{id}.json"));
+    std::fs::write(&path, &json)?;
+    Ok(id)
+}
+
+pub fn list_plan_history() -> Result<Vec<PlanHistoryEntry>> {
+    let dir = plans_dir()?;
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut entries: Vec<PlanHistoryEntry> = std::fs::read_dir(&dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .filter_map(|e| {
+            let content = std::fs::read_to_string(e.path()).ok()?;
+            serde_json::from_str(&content).ok()
+        })
+        .collect();
+    entries.sort_by(|a, b| b.id.cmp(&a.id));
+    Ok(entries)
+}
+
+pub fn get_plan_history(id: &str) -> Result<Option<PlanHistoryEntry>> {
+    let dir = plans_dir()?;
+    let path = dir.join(format!("{id}.json"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&path)?;
+    let entry: PlanHistoryEntry = serde_json::from_str(&content)?;
+    Ok(Some(entry))
 }
 
 /// Ensure child processes are killed if the Orchestrator is dropped
