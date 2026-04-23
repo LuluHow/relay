@@ -6,21 +6,21 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ── Plan definition ────────────────────────────────────────────────────────
 
 const MAX_OUTPUT_LINES: usize = 5000;
 const VALID_ON_COMPLETE: &[&str] = &["manual", "merge", "pr"];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Plan {
     pub plan: PlanMeta,
     #[serde(rename = "tasks")]
     pub tasks: Vec<TaskDef>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlanMeta {
     pub name: String,
     #[serde(default)]
@@ -29,9 +29,10 @@ pub struct PlanMeta {
     pub on_complete: String,
     #[serde(default = "default_branch")]
     pub branch: String,
-    /// Skip all permission checks in spawned claude sessions (default: false).
-    /// WARNING: This allows arbitrary code execution from the plan's prompts.
-    #[serde(default)]
+    /// Skip all permission checks in spawned claude sessions (default: true).
+    /// Required for non-interactive orchestration — Claude cannot prompt for
+    /// approval when stdin is not connected.
+    #[serde(default = "default_skip_permissions")]
     pub skip_permissions: bool,
 }
 
@@ -43,7 +44,11 @@ fn default_branch() -> String {
     "orchestrate".to_string()
 }
 
-#[derive(Debug, Clone, Deserialize)]
+fn default_skip_permissions() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TaskDef {
     pub name: String,
     pub prompt: String,
@@ -57,7 +62,7 @@ pub struct TaskDef {
 
 // ── Runtime state ──────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum TaskStatus {
     Pending,
     Blocked,
@@ -98,6 +103,35 @@ pub struct TaskState {
     pub finished_at: Option<Instant>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskSnapshot {
+    pub name: String,
+    pub status: String,
+    pub depends_on: Vec<String>,
+    pub output_tail: Vec<String>,
+    pub exit_code: Option<i32>,
+    pub elapsed_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestrationSnapshot {
+    pub plan_name: String,
+    pub branch: String,
+    pub state: String,
+    pub tasks: Vec<TaskSnapshot>,
+    pub elapsed_secs: u64,
+    pub counts: OrchestrationCounts,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestrationCounts {
+    pub pending: usize,
+    pub blocked: usize,
+    pub running: usize,
+    pub done: usize,
+    pub failed: usize,
+}
+
 pub struct Orchestrator {
     pub plan: Plan,
     pub project_root: PathBuf,
@@ -128,7 +162,7 @@ pub fn load_plan(path: &Path) -> Result<Plan> {
     Ok(plan)
 }
 
-fn validate_plan(plan: &Plan) -> Result<()> {
+pub fn validate_plan(plan: &Plan) -> Result<()> {
     if plan.tasks.is_empty() {
         bail!("Plan has no tasks");
     }
@@ -268,7 +302,48 @@ impl Orchestrator {
     }
 
     /// Create the shared worktree and branch. Must be called before tick().
+    /// If the project directory doesn't exist it is created.
+    /// If it has no git repo, `git init` + an initial commit are run automatically.
     pub fn setup(&mut self) -> Result<()> {
+        // Ensure the project directory exists
+        if !self.project_root.exists() {
+            std::fs::create_dir_all(&self.project_root)
+                .context("Failed to create project directory")?;
+        }
+
+        // Initialise git if needed
+        let git_dir = self.project_root.join(".git");
+        if !git_dir.exists() {
+            let init = Command::new("git")
+                .args(["init"])
+                .current_dir(&self.project_root)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output()
+                .context("Failed to run git init")?;
+            if !init.status.success() {
+                bail!(
+                    "git init failed: {}",
+                    String::from_utf8_lossy(&init.stderr).trim()
+                );
+            }
+
+            // Worktree requires at least one commit
+            let commit = Command::new("git")
+                .args(["commit", "--allow-empty", "-m", "init"])
+                .current_dir(&self.project_root)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output()
+                .context("Failed to create initial commit")?;
+            if !commit.status.success() {
+                bail!(
+                    "initial commit failed: {}",
+                    String::from_utf8_lossy(&commit.stderr).trim()
+                );
+            }
+        }
+
         let worktree_dir = self
             .project_root
             .join(".worktrees")
@@ -368,6 +443,61 @@ impl Orchestrator {
     /// Elapsed time since orchestration started.
     pub fn elapsed(&self) -> std::time::Duration {
         self.started_at.elapsed()
+    }
+
+    /// Build a serializable snapshot of the current orchestration state.
+    pub fn snapshot(&self) -> OrchestrationSnapshot {
+        let (pending, blocked, running, done, failed) = self.counts();
+
+        let all_terminal = self
+            .tasks
+            .iter()
+            .all(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Failed));
+
+        let state = if !all_terminal {
+            "running"
+        } else if failed > 0 {
+            "failed"
+        } else {
+            "completed"
+        }
+        .to_string();
+
+        let tasks = self
+            .tasks
+            .iter()
+            .map(|t| {
+                let tail_start = t.output_lines.len().saturating_sub(50);
+                TaskSnapshot {
+                    name: t.def.name.clone(),
+                    status: t.status.label().to_string(),
+                    depends_on: t.def.depends_on.clone(),
+                    output_tail: t.output_lines[tail_start..].to_vec(),
+                    exit_code: t.exit_code,
+                    elapsed_secs: t.started_at.map(|s| {
+                        t.finished_at
+                            .unwrap_or_else(Instant::now)
+                            .duration_since(s)
+                            .as_secs()
+                    }),
+                }
+            })
+            .collect();
+
+        OrchestrationSnapshot {
+            plan_name: self.plan.plan.name.clone(),
+            branch: self.branch_name.clone(),
+            state,
+            tasks,
+            elapsed_secs: self.elapsed().as_secs(),
+            counts: OrchestrationCounts {
+                pending,
+                blocked,
+                running,
+                done,
+                failed,
+            },
+        }
     }
 
     /// Kill all running tasks and clean up.
@@ -561,6 +691,7 @@ impl Orchestrator {
             .arg("--output-format")
             .arg("text")
             .current_dir(&worktree_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -1053,6 +1184,93 @@ pub fn create_plan_interactive(output_path: &Path) -> Result<()> {
     Ok(())
 }
 
+// ── Plan history persistence ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanHistoryEntry {
+    pub id: String,
+    pub plan_name: String,
+    pub branch: String,
+    pub state: String,
+    pub task_count: usize,
+    pub done_count: usize,
+    pub failed_count: usize,
+    pub elapsed_secs: u64,
+    pub completed_at: String,
+    pub snapshot: OrchestrationSnapshot,
+    /// Original plan definition (for relaunch).
+    #[serde(default)]
+    pub plan: Option<Plan>,
+    /// Project root used for this plan (for relaunch).
+    #[serde(default)]
+    pub project_root: Option<String>,
+}
+
+fn plans_dir() -> Result<PathBuf> {
+    let dir = dirs::home_dir()
+        .context("No home directory")?
+        .join(".relay")
+        .join("plans");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+pub fn save_plan_history(
+    snapshot: &OrchestrationSnapshot,
+    plan: &Plan,
+    project_root: &Path,
+) -> Result<String> {
+    let dir = plans_dir()?;
+    let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let id = format!("{ts}_{}", snapshot.plan_name);
+    let entry = PlanHistoryEntry {
+        id: id.clone(),
+        plan_name: snapshot.plan_name.clone(),
+        branch: snapshot.branch.clone(),
+        state: snapshot.state.clone(),
+        task_count: snapshot.tasks.len(),
+        done_count: snapshot.counts.done,
+        failed_count: snapshot.counts.failed,
+        elapsed_secs: snapshot.elapsed_secs,
+        completed_at: chrono::Utc::now().to_rfc3339(),
+        snapshot: snapshot.clone(),
+        plan: Some(plan.clone()),
+        project_root: Some(project_root.to_string_lossy().to_string()),
+    };
+    let json = serde_json::to_string_pretty(&entry)?;
+    let path = dir.join(format!("{id}.json"));
+    std::fs::write(&path, &json)?;
+    Ok(id)
+}
+
+pub fn list_plan_history() -> Result<Vec<PlanHistoryEntry>> {
+    let dir = plans_dir()?;
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut entries: Vec<PlanHistoryEntry> = std::fs::read_dir(&dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .filter_map(|e| {
+            let content = std::fs::read_to_string(e.path()).ok()?;
+            serde_json::from_str(&content).ok()
+        })
+        .collect();
+    entries.sort_by(|a, b| b.id.cmp(&a.id));
+    Ok(entries)
+}
+
+pub fn get_plan_history(id: &str) -> Result<Option<PlanHistoryEntry>> {
+    let dir = plans_dir()?;
+    let path = dir.join(format!("{id}.json"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&path)?;
+    let entry: PlanHistoryEntry = serde_json::from_str(&content)?;
+    Ok(Some(entry))
+}
+
 /// Ensure child processes are killed if the Orchestrator is dropped
 /// (e.g. on panic or early return).
 impl Drop for Orchestrator {
@@ -1272,10 +1490,25 @@ model = "sonnet"
     }
 
     #[test]
-    fn test_skip_permissions_default_false() {
+    fn test_skip_permissions_default_true() {
         let toml = r#"
 [plan]
 name = "test"
+
+[[tasks]]
+name = "a"
+prompt = "A"
+"#;
+        let plan: Plan = toml::from_str(toml).unwrap();
+        assert!(plan.plan.skip_permissions);
+    }
+
+    #[test]
+    fn test_skip_permissions_explicit_false() {
+        let toml = r#"
+[plan]
+name = "test"
+skip_permissions = false
 
 [[tasks]]
 name = "a"

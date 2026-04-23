@@ -12,3 +12,6 @@ Thumbs.db
 
 # Build
 *.d
+
+plans/
+.worktrees/

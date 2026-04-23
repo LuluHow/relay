@@ -6,26 +6,30 @@ use axum::{
 use serde::Serialize;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::api::state::{AppState, Event, HandoffEntry, SessionSnapshot};
+use crate::api::state::{AppState, Event, HandoffEntry, SessionSummary};
+use crate::orchestrator::OrchestrationSnapshot;
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WsMessage {
     Snapshot {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
         handoffs: Vec<HandoffEntry>,
     },
     SessionsUpdated {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
     },
     HandoffCreated {
         id: String,
+    },
+    OrchestrationUpdated {
+        orchestration: OrchestrationSnapshot,
     },
     Error {
         message: String,
     },
     Resync {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
         handoffs: Vec<HandoffEntry>,
     },
 }
@@ -55,6 +59,15 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         WsMessage::SessionsUpdated { sessions }
                     }
                     Event::HandoffCreated { id } => WsMessage::HandoffCreated { id },
+                    Event::OrchestrationUpdated => {
+                        if let Some(snapshot) = state.orchestration_snapshot().await {
+                            WsMessage::OrchestrationUpdated {
+                                orchestration: snapshot,
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
                     Event::Error { message } => WsMessage::Error { message },
                 };
                 if let Ok(json) = serde_json::to_string(&msg) {

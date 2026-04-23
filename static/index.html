@@ -38,6 +38,7 @@
       display: grid;
       grid-template-rows: auto 1fr auto;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
     }
 
@@ -50,6 +51,7 @@
       border-bottom: 1px solid var(--border);
       background: var(--bg-alt);
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .logo {
@@ -64,11 +66,100 @@
       font-size: 11px;
     }
 
+    .header-stats {
+      display: flex;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--dim);
+      margin-left: 12px;
+    }
+
+    .header-stats .stat-val { color: var(--text); }
+
+    .tab-group {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-left: auto;
+    }
+
+    .tab-btn {
+      padding: 3px 12px;
+      font-size: 11px;
+      font-family: var(--font);
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { background: var(--sel-bg); color: var(--green); }
+    .tab-btn + .tab-btn { border-left: 1px solid var(--border); }
+
+    /* ── Auth screen ── */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .auth-overlay[hidden] { display: none; }
+
+    .auth-box {
+      width: 320px;
+      text-align: center;
+    }
+
+    .auth-box .logo { font-size: 22px; display: block; margin-bottom: 6px; }
+    .auth-box .auth-sub { color: var(--dim); font-size: 12px; margin-bottom: 24px; }
+
+    .auth-box input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      outline: none;
+      margin-bottom: 12px;
+    }
+    .auth-box input:focus { border-color: var(--green); }
+    .auth-box input::placeholder { color: var(--muted); }
+
+    .auth-box button {
+      width: 100%;
+      padding: 9px;
+      background: var(--green);
+      color: var(--bg);
+      border: none;
+      border-radius: 4px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .auth-box button:hover { opacity: 0.85; }
+
+    .auth-error {
+      color: var(--red);
+      font-size: 11px;
+      margin-top: 10px;
+      min-height: 1.5em;
+    }
+
     .ws-status {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-left: auto;
+      margin-left: 10px;
       font-size: 11px;
       color: var(--dim);
     }
@@ -85,22 +176,22 @@
     .ws-dot.reconnecting { background: var(--amber); }
     .ws-dot.disconnected { background: var(--red); }
 
-    /* ── Two-column layout ── */
+    /* ── 3-column layout ── */
     .layout {
       display: grid;
-      grid-template-columns: 3fr 2fr;
+      grid-template-columns: 250px 1fr 300px;
       overflow: hidden;
     }
 
-    .panel {
+    .col {
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      border-right: 1px solid var(--border);
     }
+    .col:last-child { border-right: none; }
 
-    .sessions-panel { border-right: 1px solid var(--border); }
-
-    .panel-title {
+    .col-title {
       padding: 6px 12px;
       font-size: 10px;
       font-weight: bold;
@@ -112,64 +203,315 @@
       flex-shrink: 0;
     }
 
-    .panel-body {
+    .col-body {
+      flex: 1;
       overflow-y: auto;
+    }
+
+    /* ── Left: Session list ── */
+    .session-card {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+      position: relative;
+    }
+    .session-card:hover { background: var(--bg-alt); }
+    .session-card.selected {
+      background: var(--sel-bg);
+      border-left: 2px solid var(--green);
+      padding-left: 10px;
+    }
+
+    .card-r1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-project {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       flex: 1;
     }
-
-    /* ── Sessions table ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    .card-sid {
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
     }
 
-    thead {
-      position: sticky;
-      top: 0;
-      z-index: 1;
+    .card-r2 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+      font-size: 11px;
+    }
+    .card-state {
+      color: var(--dim);
+      flex-shrink: 0;
+    }
+    .card-cwd {
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-r3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 3px;
+      font-size: 11px;
+    }
+    .card-age { color: var(--dim); flex-shrink: 0; }
+    .card-spark {
+      color: var(--green);
+      font-size: 10px;
+      letter-spacing: -0.5px;
+      overflow: hidden;
+      flex: 1;
+    }
+    .card-tokens {
+      color: var(--dim);
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    /* ── Center: Session detail ── */
+    .detail-head {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .detail-r1 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .detail-project {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text);
+    }
+    .detail-state {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    .detail-actions { margin-left: auto; }
+
+    .detail-r2 {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .detail-r2 .val { color: var(--text); }
+    .detail-r2 .branch { color: var(--amber); }
+    .detail-r2 .added { color: var(--green); }
+    .detail-r2 .removed { color: var(--red); }
+
+    /* KPI strip */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .kpi-box {
+      padding: 8px 12px;
+      border-right: 1px solid var(--border);
+      text-align: center;
+    }
+    .kpi-box:last-child { border-right: none; }
+    .kpi-label {
+      font-size: 9px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .kpi-value {
+      font-size: 13px;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    /* Tool timeline */
+    .tl-title {
+      padding: 6px 14px;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
       background: var(--bg-alt);
     }
 
-    th {
-      padding: 5px 10px;
-      text-align: left;
-      font-size: 10px;
-      font-weight: normal;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
+    .tl-body {
+      flex: 1;
+      overflow-y: auto;
     }
 
-    td {
-      padding: 5px 10px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
+    .tl-entry {
+      padding: 3px 14px;
+      font-size: 11px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid #1a1a1a;
+      align-items: baseline;
+    }
+    .tl-time { color: var(--muted); flex-shrink: 0; font-size: 10px; }
+    .tl-name { font-weight: bold; flex-shrink: 0; }
+    .tl-icon { flex-shrink: 0; }
+    .tl-input {
+      color: var(--dim);
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 160px;
-      vertical-align: middle;
+      white-space: nowrap;
     }
 
-    td.td-action { max-width: none; width: 1%; }
-
-    tr.session-row {
-      cursor: pointer;
-      transition: background 0.1s;
+    /* Detail body grid */
+    .detail-body {
+      flex: 1;
+      display: grid;
+      grid-template-areas:
+        "tools tools"
+        "files prompts";
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr auto;
+      overflow: hidden;
     }
-    tr.session-row:hover    { background: var(--bg-alt); }
-    tr.session-row.expanded { background: var(--sel-bg); }
+    .detail-body-tools {
+      grid-area: tools;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .detail-body-files {
+      grid-area: files;
+      padding: 8px 14px;
+      overflow-y: auto;
+      max-height: 200px;
+      border-top: 1px solid var(--border);
+    }
+    .detail-body-prompts {
+      grid-area: prompts;
+      padding: 8px 14px;
+      overflow-y: auto;
+      max-height: 200px;
+      border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+    }
 
-    tr.detail-row > td {
-      background: var(--sel-bg);
-      padding: 8px 12px 10px;
+    .section-title {
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .file-entry {
+      font-size: 11px;
+      display: flex;
+      gap: 6px;
+      padding: 1px 0;
+    }
+    .file-marker { font-weight: bold; flex-shrink: 0; width: 12px; }
+    .file-marker-a { color: var(--green); }
+    .file-marker-m { color: var(--amber); }
+    .file-path {
       color: var(--dim);
-      font-size: 12px;
-      cursor: default;
-      max-width: none;
-      white-space: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
+
+    .msg-entry {
+      font-size: 11px;
+      padding: 2px 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .msg-user { color: var(--cyan); }
+    .msg-assistant { color: var(--dim); }
+    .msg-prefix { color: var(--muted); }
+
+    /* ── Right: Metrics ── */
+    .metric-group {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .metric-label {
+      font-size: 9px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 14px;
+      color: var(--text);
+    }
+    .metric-value .unit { font-size: 11px; color: var(--dim); }
+    .metric-spark {
+      color: var(--green);
+      font-size: 11px;
+      letter-spacing: -0.5px;
+      margin-left: 6px;
+    }
+
+    .rate-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      margin-top: 3px;
+    }
+    .rate-label { color: var(--dim); width: 20px; flex-shrink: 0; }
+    .rate-bar { letter-spacing: -1px; font-size: 12px; flex: 1; }
+    .rate-pct { color: var(--dim); width: 32px; text-align: right; flex-shrink: 0; }
+
+    .ctx-full-bar {
+      font-size: 12px;
+      letter-spacing: -1px;
+      margin-top: 4px;
+    }
+    .ctx-detail {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    .compaction-badge {
+      font-size: 11px;
+      color: var(--amber);
+      padding: 2px 0;
+    }
+
+    .activity-entry {
+      font-size: 10px;
+      display: flex;
+      gap: 6px;
+      padding: 1px 0;
+      color: var(--dim);
+    }
+    .activity-time { color: var(--muted); flex-shrink: 0; }
+    .activity-name { flex-shrink: 0; }
 
     /* ── Status dots ── */
     .dot {
@@ -184,29 +526,6 @@
     .dot-starting { background: var(--cyan); }
     .dot-ended    { background: var(--red); }
     .dot-idle     { background: var(--muted); }
-
-    /* ── Context bar ── */
-    .ctx-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .ctx-track {
-      width: 44px;
-      height: 3px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .ctx-fill {
-      height: 100%;
-      border-radius: 2px;
-    }
-    .ctx-label {
-      font-size: 11px;
-      color: var(--dim);
-      min-width: 30px;
-    }
 
     /* ── Handoff button ── */
     .btn-handoff {
@@ -226,7 +545,12 @@
     .btn-handoff.saved   { border-color: var(--green); color: var(--green); }
     .btn-handoff.errored { border-color: var(--red);   color: var(--red); }
 
-    /* ── Handoffs panel ── */
+    /* ── Handoffs view ── */
+    .handoffs-view {
+      overflow-y: auto;
+      padding: 0;
+    }
+
     .handoff-item {
       border-bottom: 1px solid var(--border);
     }
@@ -280,11 +604,570 @@
     .handoff-content .md-h2 { color: var(--text); font-weight: bold; }
     .handoff-content .md-bold { color: var(--text); }
 
-    /* ── Empty / loading states ── */
+    /* ── Plans view ── */
+    .plans-view {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .plans-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .plans-sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .plans-sidebar .col-title {
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .plans-sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .plan-history-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .plan-history-item:hover { background: var(--bg-alt); }
+    .plan-history-item.selected {
+      background: var(--sel-bg);
+      border-left: 2px solid var(--green);
+      padding-left: 10px;
+    }
+
+    .plan-history-item .phi-name {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .plan-history-item .phi-meta {
+      font-size: 10px;
+      color: var(--dim);
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .plan-history-item .phi-state { font-size: 10px; }
+
+    .plans-main {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .btn-new-plan {
+      margin: 8px 12px;
+      padding: 5px 0;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-new-plan:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .new-project-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .new-project-row select,
+    .new-project-row input {
+      flex: 1;
+    }
+    .new-project-row input {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .new-project-row input:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+    .new-project-row select {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      max-width: 200px;
+    }
+
+    .plan-launch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      padding: 32px;
+      gap: 14px;
+    }
+
+    .plan-launch label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      align-self: stretch;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .plan-launch textarea {
+      width: 100%;
+      max-width: 600px;
+      min-height: 240px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .plan-launch textarea:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .plan-launch .btn-launch {
+      background: none;
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 6px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .plan-launch .btn-launch:hover {
+      background: var(--sel-bg);
+    }
+    .plan-launch .btn-launch.loading {
+      border-color: var(--amber);
+      color: var(--amber);
+      pointer-events: none;
+    }
+
+    .plan-launch select {
+      width: 100%;
+      max-width: 600px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .plan-launch select:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .plan-error {
+      color: var(--red);
+      font-size: 11px;
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* ── Wizard / TOML mode tabs ── */
+    .plan-mode-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+    .plan-mode-btn {
+      padding: 3px 14px;
+      font-size: 11px;
+      font-family: var(--font);
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .plan-mode-btn:hover { color: var(--text); }
+    .plan-mode-btn.active { background: var(--sel-bg); color: var(--green); }
+    .plan-mode-btn + .plan-mode-btn { border-left: 1px solid var(--border); }
+
+    /* ── Wizard form ── */
+    .wizard-form {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .wizard-form .field-row {
+      display: flex;
+      gap: 10px;
+    }
+    .wizard-form .field-row > .field-group { flex: 1; }
+    .wizard-form .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .wizard-form .field-group label {
+      font-size: 10px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0;
+      align-self: flex-start;
+    }
+    .wizard-form input,
+    .wizard-form select,
+    .wizard-form textarea {
+      width: 100%;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .wizard-form input:focus,
+    .wizard-form select:focus,
+    .wizard-form textarea:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+    .wizard-form textarea {
+      min-height: 60px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .wizard-section-title {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+      margin-top: 6px;
+    }
+
+    /* ── Task cards in wizard ── */
+    .wizard-task {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+    }
+    .wizard-task .task-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wizard-task .task-num {
+      font-size: 10px;
+      color: var(--muted);
+      min-width: 14px;
+    }
+    .wizard-task .task-head input {
+      flex: 1;
+    }
+    .btn-remove-task {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .btn-remove-task:hover { color: var(--red); }
+
+    .btn-add-task {
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--dim);
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .btn-add-task:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .wizard-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wizard-toggle-row input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--green);
+    }
+    .wizard-toggle-row label {
+      font-size: 11px !important;
+      text-transform: none !important;
+      color: var(--text) !important;
+      letter-spacing: 0 !important;
+    }
+
+    /* Plan monitoring */
+    .plan-monitor {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .plan-header-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .plan-name {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .plan-branch {
+      font-size: 11px;
+      color: var(--amber);
+    }
+
+    .plan-state-badge {
+      font-size: 10px;
+      padding: 1px 8px;
+      border-radius: 3px;
+      border: 1px solid;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .plan-elapsed {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    .plan-counts {
+      font-size: 11px;
+      color: var(--dim);
+      margin-left: auto;
+    }
+    .plan-counts .cnt-val { color: var(--text); }
+
+    /* Task list */
+    .task-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .task-card {
+      margin: 0 14px 6px;
+      padding: 8px 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .task-card:hover {
+      background: var(--sel-bg);
+    }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-status-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      width: 16px;
+      text-align: center;
+    }
+    .task-status-icon.pending  { color: var(--muted); }
+    .task-status-icon.blocked  { color: var(--muted); opacity: 0.6; }
+    .task-status-icon.running  { color: var(--green); }
+    .task-status-icon.done     { color: var(--green); }
+    .task-status-icon.failed   { color: var(--red); }
+
+    @keyframes pulse-glow {
+      0%, 100% { text-shadow: 0 0 4px var(--green-glow); }
+      50%      { text-shadow: 0 0 10px var(--green-glow), 0 0 16px var(--green); }
+    }
+    .task-status-icon.running {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    .task-name {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--text);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-elapsed {
+      font-size: 10px;
+      color: var(--dim);
+      flex-shrink: 0;
+    }
+
+    .task-deps {
+      font-size: 10px;
+      color: var(--muted);
+      margin-left: 24px;
+      margin-top: 2px;
+    }
+
+    .task-output {
+      display: none;
+      margin-top: 8px;
+      margin-left: 24px;
+    }
+    .task-output.visible { display: block; }
+
+    .task-output pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 8px 10px;
+      font-family: var(--font);
+      font-size: 11px;
+      color: var(--dim);
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .task-exit-code {
+      font-size: 10px;
+      margin-top: 4px;
+      color: var(--muted);
+    }
+    .task-exit-code.success { color: var(--green); }
+    .task-exit-code.failure { color: var(--red); }
+
+    /* Plan action bar */
+    .plan-actions {
+      display: flex;
+      gap: 8px;
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .plan-actions .btn-plan {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .plan-actions .btn-plan:hover   { opacity: 0.85; }
+    .plan-actions .btn-plan.abort   { border-color: var(--red);   color: var(--red); }
+    .plan-actions .btn-plan.merge   { border-color: var(--green); color: var(--green); }
+    .plan-actions .btn-plan.pr      { border-color: var(--cyan);  color: var(--cyan); }
+    .plan-actions .btn-plan.newplan { border-color: var(--border); color: var(--dim); }
+    .plan-actions .btn-plan:disabled { opacity: 0.4; pointer-events: none; }
+
+    .plan-actions .pr-url {
+      font-size: 11px;
+      color: var(--cyan);
+      align-self: center;
+      margin-left: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .plan-actions .pr-url a { color: var(--cyan); }
+
+    /* ── Empty states ── */
     .empty {
       padding: 28px 16px;
       color: var(--muted);
       text-align: center;
+      font-size: 12px;
+    }
+
+    .empty-detail {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--muted);
       font-size: 12px;
     }
 
@@ -299,73 +1182,501 @@
       color: var(--muted);
       flex-shrink: 0;
     }
+    .footer-hints { margin-left: auto; color: var(--border); }
 
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    /* ── Pulsing dot for running sessions ── */
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 4px var(--green); }
+      50%      { box-shadow: 0 0 8px var(--green), 0 0 14px var(--green-glow); }
+    }
+    .dot-working {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    /* ── Config toggle buttons ── */
+    .config-toggles {
+      display: flex;
+      gap: 6px;
+      margin-left: 8px;
+    }
+
+    .btn-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 10px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-toggle:hover { opacity: 0.85; }
+    .btn-toggle.on  { border-color: var(--green); color: var(--green); }
+    .btn-toggle.off { border-color: var(--red);   color: var(--red); }
+    .btn-toggle.flash {
+      animation: flash-border 0.4s ease;
+    }
+    @keyframes flash-border {
+      50% { box-shadow: 0 0 8px var(--green-glow); }
+    }
+
+    /* ── Notification banner ── */
+    .notif-banner {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 4px 14px;
+      background: #1a1a2e;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .notif-banner button {
+      background: none;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      padding: 1px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 10px;
+    }
+    .notif-banner .dismiss {
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    /* ── Mobile back button ── */
+    .mobile-back {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 3px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+    .mobile-back:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Plans sidebar toggle (mobile) ── */
+    .plans-sidebar-toggle {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      margin: 8px 12px;
+      flex-shrink: 0;
+    }
+    .plans-sidebar-toggle:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Responsive: Tablet ── */
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 250px 1fr;
+      }
+      #col-right {
+        display: none;
+      }
+    }
+
+    /* ── Responsive: Mobile ── */
+    @media (max-width: 768px) {
+      html { font-size: 12px; }
+
+      /* ── Header ── */
+      header {
+        gap: 4px;
+        padding: 6px 10px;
+        flex-wrap: wrap;
+      }
+
+      .header-stats {
+        display: none;
+      }
+
+      .config-toggles {
+        order: 9;
+        margin-left: 0;
+      }
+
+      .tab-group {
+        margin-left: auto;
+        order: 2;
+      }
+
+      .ws-status {
+        margin-left: 0;
+        order: 3;
+      }
+
+      .mobile-back { display: inline-flex; }
+
+      /* ── Sessions view ── */
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      #col-left {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      /* Mobile: show list OR detail, not both */
+      .layout.mobile-detail #col-left {
+        display: none;
+      }
+      .layout:not(.mobile-detail) #col-center {
+        display: none;
+      }
+
+      .session-card { padding: 8px 10px; }
+
+      .kpi-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .detail-head { padding: 8px 10px; }
+
+      .detail-body {
+        grid-template-areas:
+          "tools files"
+          "prompts prompts";
+        grid-template-rows: 1fr auto;
+      }
+      .detail-body-files {
+        border-top: none;
+        border-left: 1px solid var(--border);
+        max-height: none;
+      }
+      .detail-body-prompts {
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+
+      /* ── Handoffs view ── */
+      .handoffs-view {
+        padding: 0;
+      }
+
+      .handoff-header {
+        padding: 10px 10px;
+      }
+
+      .handoff-id {
+        font-size: 11px;
+        word-break: break-all;
+        white-space: normal;
+      }
+
+      .handoff-content {
+        padding: 10px;
+        max-height: 60vh;
+      }
+
+      /* ── Plans view ── */
+      .plans-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+
+      .plans-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: none;
+        overflow: visible;
+      }
+
+      .plans-sidebar.collapsed .plans-sidebar-body {
+        display: none;
+      }
+      .plans-sidebar.collapsed .btn-new-plan {
+        display: none;
+      }
+
+      .plans-sidebar-toggle {
+        display: block;
+      }
+
+      .plans-sidebar-body {
+        max-height: 30vh;
+        overflow-y: auto;
+      }
+
+      .plan-launch {
+        padding: 16px 12px;
+        gap: 10px;
+      }
+
+      .plan-launch textarea {
+        min-height: 160px;
+        max-width: 100%;
+      }
+
+      .plan-launch label {
+        max-width: 100%;
+      }
+
+      .plan-launch select {
+        max-width: 100%;
+      }
+
+      .plan-error {
+        max-width: 100%;
+      }
+
+      .plan-header-bar {
+        padding: 8px 10px;
+        gap: 6px;
+      }
+
+      .plan-name {
+        font-size: 13px;
+      }
+
+      .plan-counts {
+        margin-left: 0;
+        width: 100%;
+      }
+
+      .task-card {
+        margin: 0 8px 6px;
+        padding: 8px 10px;
+      }
+
+      .task-output pre {
+        font-size: 10px;
+        max-height: 200px;
+      }
+
+      .plan-actions {
+        flex-wrap: wrap;
+        padding: 8px 10px;
+        gap: 6px;
+      }
+
+      .plan-actions .btn-plan {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+        padding: 6px 8px;
+      }
+
+      .plan-mode-tabs {
+        align-self: stretch;
+      }
+      .plan-mode-btn {
+        flex: 1;
+        text-align: center;
+      }
+
+      /* Prevent iOS auto-zoom on input focus (requires font-size >= 16px) */
+      input, select, textarea {
+        font-size: 16px !important;
+      }
+
+      /* ── Footer ── */
+      footer {
+        flex-wrap: wrap;
+        padding: 4px 10px;
+        gap: 8px;
+      }
+      .footer-hints { display: none; }
+    }
   </style>
 </head>
 <body>
+  <!-- Auth overlay (shown when token required) -->
+  <div class="auth-overlay" id="auth-overlay" hidden>
+    <div class="auth-box">
+      <span class="logo">relay</span>
+      <div class="auth-sub">Enter your API token to continue</div>
+      <form id="auth-form" onsubmit="return handleLogin(event)">
+        <input type="password" id="auth-token" placeholder="API token" autocomplete="off" autofocus>
+        <button type="submit">Sign in</button>
+      </form>
+      <div class="auth-error" id="auth-error"></div>
+    </div>
+  </div>
+
   <header>
     <span class="logo">relay</span>
-    <span class="version" id="version">v—</span>
+    <span class="version" id="version">v&mdash;</span>
+    <div class="header-stats" id="header-stats"></div>
+    <div class="tab-group">
+      <button class="tab-btn active" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
+      <button class="tab-btn" data-tab="handoffs" onclick="switchTab('handoffs')">Handoffs</button>
+      <button class="tab-btn" data-tab="plans" onclick="switchTab('plans')">Plans</button>
+    </div>
+    <div class="config-toggles" id="config-toggles">
+      <button class="btn-toggle off" id="btn-auto-handoff" onclick="toggleConfig('auto_handoff')" title="Toggle auto-handoff">auto OFF</button>
+      <button class="btn-toggle off" id="btn-auto-commit" onclick="toggleConfig('auto_commit')" title="Toggle auto-commit">git &#9675;</button>
+    </div>
     <div class="ws-status">
       <span id="ws-label">connecting</span>
       <div class="ws-dot reconnecting" id="ws-dot"></div>
     </div>
+    <div class="notif-banner" id="notif-banner" style="display:none">
+      <span>Enable notifications for handoff alerts</span>
+      <button onclick="requestNotifPermission()">Enable</button>
+      <button class="dismiss" onclick="dismissNotifBanner()">Dismiss</button>
+    </div>
   </header>
 
-  <div class="layout">
-    <!-- Sessions panel -->
-    <section class="panel sessions-panel">
-      <div class="panel-title">Sessions</div>
-      <div class="panel-body">
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Project</th>
-              <th>Model</th>
-              <th>Branch</th>
-              <th>Turns</th>
-              <th>Context</th>
-              <th>Cost</th>
-              <th>Age</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="sessions-body">
-            <tr><td colspan="9" class="empty">Loading…</td></tr>
-          </tbody>
-        </table>
+  <!-- Sessions 3-column view -->
+  <div class="layout" id="sessions-view">
+    <div class="col" id="col-left">
+      <div class="col-title">Sessions</div>
+      <div class="col-body" id="session-list">
+        <div class="empty">Loading&hellip;</div>
       </div>
-    </section>
-
-    <!-- Handoffs panel -->
-    <section class="panel handoffs-panel">
-      <div class="panel-title">Handoffs</div>
-      <div class="panel-body" id="handoffs-list">
-        <div class="empty">Loading…</div>
+    </div>
+    <div class="col" id="col-center">
+      <div class="empty-detail" id="detail-empty">Select a session</div>
+      <div id="detail-content" style="display:none;flex-direction:column;height:100%;overflow:hidden"></div>
+    </div>
+    <div class="col" style="border-right:none" id="col-right">
+      <div class="col-title">Metrics</div>
+      <div class="col-body" id="metrics-body">
+        <div class="empty">Select a session</div>
       </div>
-    </section>
+    </div>
   </div>
 
+  <!-- Handoffs view -->
+  <div class="handoffs-view" id="handoffs-view" style="display:none">
+    <div class="empty">Loading&hellip;</div>
+  </div>
+
+  <!-- Plans view -->
+  <div class="plans-view" id="plans-view" style="display:none"></div>
+
   <footer>
-    <span id="footer-counts">—</span>
-    <span id="footer-updated">—</span>
+    <span id="footer-counts">&mdash;</span>
+    <span id="footer-updated">&mdash;</span>
+    <span id="footer-uptime"></span>
+    <span class="footer-hints">1/2/3 tabs &middot; j/k navigate &middot; enter select</span>
   </footer>
 
   <script>
+    // ── morphdom 2.7.4 (MIT) — DOM reconciliation ──
+    // https://github.com/patrick-steele-idem/morphdom
+    (function(global,factory){typeof exports==="object"&&typeof module!=="undefined"?module.exports=factory():typeof define==="function"&&define.amd?define(factory):(global=global||self,global.morphdom=factory())})(this,function(){"use strict";var DOCUMENT_FRAGMENT_NODE=11;function morphAttrs(fromNode,toNode){var toNodeAttrs=toNode.attributes;var attr;var attrName;var attrNamespaceURI;var attrValue;var fromValue;if(toNode.nodeType===DOCUMENT_FRAGMENT_NODE||fromNode.nodeType===DOCUMENT_FRAGMENT_NODE){return}for(var i=toNodeAttrs.length-1;i>=0;i--){attr=toNodeAttrs[i];attrName=attr.name;attrNamespaceURI=attr.namespaceURI;attrValue=attr.value;if(attrNamespaceURI){attrName=attr.localName||attrName;fromValue=fromNode.getAttributeNS(attrNamespaceURI,attrName);if(fromValue!==attrValue){if(attr.prefix==="xmlns"){attrName=attr.name}fromNode.setAttributeNS(attrNamespaceURI,attrName,attrValue)}}else{fromValue=fromNode.getAttribute(attrName);if(fromValue!==attrValue){fromNode.setAttribute(attrName,attrValue)}}}var fromNodeAttrs=fromNode.attributes;for(var d=fromNodeAttrs.length-1;d>=0;d--){attr=fromNodeAttrs[d];attrName=attr.name;attrNamespaceURI=attr.namespaceURI;if(attrNamespaceURI){attrName=attr.localName||attrName;if(!toNode.hasAttributeNS(attrNamespaceURI,attrName)){fromNode.removeAttributeNS(attrNamespaceURI,attrName)}}else{if(!toNode.hasAttribute(attrName)){fromNode.removeAttribute(attrName)}}}}var range;var NS_XHTML="http://www.w3.org/1999/xhtml";var doc=typeof document==="undefined"?undefined:document;var HAS_TEMPLATE_SUPPORT=!!doc&&"content"in doc.createElement("template");var HAS_RANGE_SUPPORT=!!doc&&doc.createRange&&"createContextualFragment"in doc.createRange();function createFragmentFromTemplate(str){var template=doc.createElement("template");template.innerHTML=str;return template.content.childNodes[0]}function createFragmentFromRange(str){if(!range){range=doc.createRange();range.selectNode(doc.body)}var fragment=range.createContextualFragment(str);return fragment.childNodes[0]}function createFragmentFromWrap(str){var fragment=doc.createElement("body");fragment.innerHTML=str;return fragment.childNodes[0]}function toElement(str){str=str.trim();if(HAS_TEMPLATE_SUPPORT){return createFragmentFromTemplate(str)}else if(HAS_RANGE_SUPPORT){return createFragmentFromRange(str)}return createFragmentFromWrap(str)}function compareNodeNames(fromEl,toEl){var fromNodeName=fromEl.nodeName;var toNodeName=toEl.nodeName;var fromCodeStart,toCodeStart;if(fromNodeName===toNodeName){return true}fromCodeStart=fromNodeName.charCodeAt(0);toCodeStart=toNodeName.charCodeAt(0);if(fromCodeStart<=90&&toCodeStart>=97){return fromNodeName===toNodeName.toUpperCase()}else if(toCodeStart<=90&&fromCodeStart>=97){return toNodeName===fromNodeName.toUpperCase()}else{return false}}function createElementNS(name,namespaceURI){return!namespaceURI||namespaceURI===NS_XHTML?doc.createElement(name):doc.createElementNS(namespaceURI,name)}function moveChildren(fromEl,toEl){var curChild=fromEl.firstChild;while(curChild){var nextChild=curChild.nextSibling;toEl.appendChild(curChild);curChild=nextChild}return toEl}function syncBooleanAttrProp(fromEl,toEl,name){if(fromEl[name]!==toEl[name]){fromEl[name]=toEl[name];if(fromEl[name]){fromEl.setAttribute(name,"")}else{fromEl.removeAttribute(name)}}}var specialElHandlers={OPTION:function(fromEl,toEl){var parentNode=fromEl.parentNode;if(parentNode){var parentName=parentNode.nodeName.toUpperCase();if(parentName==="OPTGROUP"){parentNode=parentNode.parentNode;parentName=parentNode&&parentNode.nodeName.toUpperCase()}if(parentName==="SELECT"&&!parentNode.hasAttribute("multiple")){if(fromEl.hasAttribute("selected")&&!toEl.selected){fromEl.setAttribute("selected","selected");fromEl.removeAttribute("selected")}parentNode.selectedIndex=-1}}syncBooleanAttrProp(fromEl,toEl,"selected")},INPUT:function(fromEl,toEl){syncBooleanAttrProp(fromEl,toEl,"checked");syncBooleanAttrProp(fromEl,toEl,"disabled");if(fromEl.value!==toEl.value){fromEl.value=toEl.value}if(!toEl.hasAttribute("value")){fromEl.removeAttribute("value")}},TEXTAREA:function(fromEl,toEl){var newValue=toEl.value;if(fromEl.value!==newValue){fromEl.value=newValue}var firstChild=fromEl.firstChild;if(firstChild){var oldValue=firstChild.nodeValue;if(oldValue==newValue||!newValue&&oldValue==fromEl.placeholder){return}firstChild.nodeValue=newValue}},SELECT:function(fromEl,toEl){if(!toEl.hasAttribute("multiple")){var selectedIndex=-1;var i=0;var curChild=fromEl.firstChild;var optgroup;var nodeName;while(curChild){nodeName=curChild.nodeName&&curChild.nodeName.toUpperCase();if(nodeName==="OPTGROUP"){optgroup=curChild;curChild=optgroup.firstChild}else{if(nodeName==="OPTION"){if(curChild.hasAttribute("selected")){selectedIndex=i;break}i++}curChild=curChild.nextSibling;if(!curChild&&optgroup){curChild=optgroup.nextSibling;optgroup=null}}}fromEl.selectedIndex=selectedIndex}}};var ELEMENT_NODE=1;var DOCUMENT_FRAGMENT_NODE$1=11;var TEXT_NODE=3;var COMMENT_NODE=8;function noop(){}function defaultGetNodeKey(node){if(node){return node.getAttribute&&node.getAttribute("id")||node.id}}function morphdomFactory(morphAttrs){return function morphdom(fromNode,toNode,options){if(!options){options={}}if(typeof toNode==="string"){if(fromNode.nodeName==="#document"||fromNode.nodeName==="HTML"||fromNode.nodeName==="BODY"){var toNodeHtml=toNode;toNode=doc.createElement("html");toNode.innerHTML=toNodeHtml}else{toNode=toElement(toNode)}}else if(toNode.nodeType===DOCUMENT_FRAGMENT_NODE$1){toNode=toNode.firstElementChild}var getNodeKey=options.getNodeKey||defaultGetNodeKey;var onBeforeNodeAdded=options.onBeforeNodeAdded||noop;var onNodeAdded=options.onNodeAdded||noop;var onBeforeElUpdated=options.onBeforeElUpdated||noop;var onElUpdated=options.onElUpdated||noop;var onBeforeNodeDiscarded=options.onBeforeNodeDiscarded||noop;var onNodeDiscarded=options.onNodeDiscarded||noop;var onBeforeElChildrenUpdated=options.onBeforeElChildrenUpdated||noop;var skipFromChildren=options.skipFromChildren||noop;var addChild=options.addChild||function(parent,child){return parent.appendChild(child)};var childrenOnly=options.childrenOnly===true;var fromNodesLookup=Object.create(null);var keyedRemovalList=[];function addKeyedRemoval(key){keyedRemovalList.push(key)}function walkDiscardedChildNodes(node,skipKeyedNodes){if(node.nodeType===ELEMENT_NODE){var curChild=node.firstChild;while(curChild){var key=undefined;if(skipKeyedNodes&&(key=getNodeKey(curChild))){addKeyedRemoval(key)}else{onNodeDiscarded(curChild);if(curChild.firstChild){walkDiscardedChildNodes(curChild,skipKeyedNodes)}}curChild=curChild.nextSibling}}}function removeNode(node,parentNode,skipKeyedNodes){if(onBeforeNodeDiscarded(node)===false){return}if(parentNode){parentNode.removeChild(node)}onNodeDiscarded(node);walkDiscardedChildNodes(node,skipKeyedNodes)}function indexTree(node){if(node.nodeType===ELEMENT_NODE||node.nodeType===DOCUMENT_FRAGMENT_NODE$1){var curChild=node.firstChild;while(curChild){var key=getNodeKey(curChild);if(key){fromNodesLookup[key]=curChild}indexTree(curChild);curChild=curChild.nextSibling}}}indexTree(fromNode);function handleNodeAdded(el){onNodeAdded(el);var curChild=el.firstChild;while(curChild){var nextSibling=curChild.nextSibling;var key=getNodeKey(curChild);if(key){var unmatchedFromEl=fromNodesLookup[key];if(unmatchedFromEl&&compareNodeNames(curChild,unmatchedFromEl)){curChild.parentNode.replaceChild(unmatchedFromEl,curChild);morphEl(unmatchedFromEl,curChild)}else{handleNodeAdded(curChild)}}else{handleNodeAdded(curChild)}curChild=nextSibling}}function cleanupFromEl(fromEl,curFromNodeChild,curFromNodeKey){while(curFromNodeChild){var fromNextSibling=curFromNodeChild.nextSibling;if(curFromNodeKey=getNodeKey(curFromNodeChild)){addKeyedRemoval(curFromNodeKey)}else{removeNode(curFromNodeChild,fromEl,true)}curFromNodeChild=fromNextSibling}}function morphEl(fromEl,toEl,childrenOnly){var toElKey=getNodeKey(toEl);if(toElKey){delete fromNodesLookup[toElKey]}if(!childrenOnly){var beforeUpdateResult=onBeforeElUpdated(fromEl,toEl);if(beforeUpdateResult===false){return}else if(beforeUpdateResult instanceof HTMLElement){fromEl=beforeUpdateResult;indexTree(fromEl)}morphAttrs(fromEl,toEl);onElUpdated(fromEl);if(onBeforeElChildrenUpdated(fromEl,toEl)===false){return}}if(fromEl.nodeName!=="TEXTAREA"){morphChildren(fromEl,toEl)}else{specialElHandlers.TEXTAREA(fromEl,toEl)}}function morphChildren(fromEl,toEl){var skipFrom=skipFromChildren(fromEl,toEl);var curToNodeChild=toEl.firstChild;var curFromNodeChild=fromEl.firstChild;var curToNodeKey;var curFromNodeKey;var fromNextSibling;var toNextSibling;var matchingFromEl;outer:while(curToNodeChild){toNextSibling=curToNodeChild.nextSibling;curToNodeKey=getNodeKey(curToNodeChild);while(!skipFrom&&curFromNodeChild){fromNextSibling=curFromNodeChild.nextSibling;if(curToNodeChild.isSameNode&&curToNodeChild.isSameNode(curFromNodeChild)){curToNodeChild=toNextSibling;curFromNodeChild=fromNextSibling;continue outer}curFromNodeKey=getNodeKey(curFromNodeChild);var curFromNodeType=curFromNodeChild.nodeType;var isCompatible=undefined;if(curFromNodeType===curToNodeChild.nodeType){if(curFromNodeType===ELEMENT_NODE){if(curToNodeKey){if(curToNodeKey!==curFromNodeKey){if(matchingFromEl=fromNodesLookup[curToNodeKey]){if(fromNextSibling===matchingFromEl){isCompatible=false}else{fromEl.insertBefore(matchingFromEl,curFromNodeChild);if(curFromNodeKey){addKeyedRemoval(curFromNodeKey)}else{removeNode(curFromNodeChild,fromEl,true)}curFromNodeChild=matchingFromEl;curFromNodeKey=getNodeKey(curFromNodeChild)}}else{isCompatible=false}}}else if(curFromNodeKey){isCompatible=false}isCompatible=isCompatible!==false&&compareNodeNames(curFromNodeChild,curToNodeChild);if(isCompatible){morphEl(curFromNodeChild,curToNodeChild)}}else if(curFromNodeType===TEXT_NODE||curFromNodeType==COMMENT_NODE){isCompatible=true;if(curFromNodeChild.nodeValue!==curToNodeChild.nodeValue){curFromNodeChild.nodeValue=curToNodeChild.nodeValue}}}if(isCompatible){curToNodeChild=toNextSibling;curFromNodeChild=fromNextSibling;continue outer}if(curFromNodeKey){addKeyedRemoval(curFromNodeKey)}else{removeNode(curFromNodeChild,fromEl,true)}curFromNodeChild=fromNextSibling}if(curToNodeKey&&(matchingFromEl=fromNodesLookup[curToNodeKey])&&compareNodeNames(matchingFromEl,curToNodeChild)){if(!skipFrom){addChild(fromEl,matchingFromEl)}morphEl(matchingFromEl,curToNodeChild)}else{var onBeforeNodeAddedResult=onBeforeNodeAdded(curToNodeChild);if(onBeforeNodeAddedResult!==false){if(onBeforeNodeAddedResult){curToNodeChild=onBeforeNodeAddedResult}if(curToNodeChild.actualize){curToNodeChild=curToNodeChild.actualize(fromEl.ownerDocument||doc)}addChild(fromEl,curToNodeChild);handleNodeAdded(curToNodeChild)}}curToNodeChild=toNextSibling;curFromNodeChild=fromNextSibling}cleanupFromEl(fromEl,curFromNodeChild,curFromNodeKey);var specialElHandler=specialElHandlers[fromEl.nodeName];if(specialElHandler){specialElHandler(fromEl,toEl)}}var morphedNode=fromNode;var morphedNodeType=morphedNode.nodeType;var toNodeType=toNode.nodeType;if(!childrenOnly){if(morphedNodeType===ELEMENT_NODE){if(toNodeType===ELEMENT_NODE){if(!compareNodeNames(fromNode,toNode)){onNodeDiscarded(fromNode);morphedNode=moveChildren(fromNode,createElementNS(toNode.nodeName,toNode.namespaceURI))}}else{morphedNode=toNode}}else if(morphedNodeType===TEXT_NODE||morphedNodeType===COMMENT_NODE){if(toNodeType===morphedNodeType){if(morphedNode.nodeValue!==toNode.nodeValue){morphedNode.nodeValue=toNode.nodeValue}return morphedNode}else{morphedNode=toNode}}}if(morphedNode===toNode){onNodeDiscarded(fromNode)}else{if(toNode.isSameNode&&toNode.isSameNode(morphedNode)){return}morphEl(morphedNode,toNode,childrenOnly);if(keyedRemovalList){for(var i=0,len=keyedRemovalList.length;i<len;i++){var elToRemove=fromNodesLookup[keyedRemovalList[i]];if(elToRemove){removeNode(elToRemove,elToRemove.parentNode,false)}}}}if(!childrenOnly&&morphedNode!==fromNode&&fromNode.parentNode){if(morphedNode.actualize){morphedNode=morphedNode.actualize(fromNode.ownerDocument||doc)}fromNode.parentNode.replaceChild(morphedNode,fromNode)}return morphedNode}}var morphdom=morphdomFactory(morphAttrs);return morphdom});
+
+    // ── DOM patching via morphdom ──
+    function patchDOM(el, html) {
+      if (!el) return;
+      var w = document.createElement(el.tagName);
+      w.innerHTML = html;
+      morphdom(el, w, {
+        childrenOnly: true,
+        getNodeKey: function(n) {
+          return n.getAttribute && (n.getAttribute('data-id') || n.id);
+        },
+        onBeforeElUpdated: function(from, to) {
+          // Don't clobber buttons mid-save
+          if (from.classList && from.classList.contains('saving')) return false;
+          // Don't clobber focused inputs/textareas
+          if (from === document.activeElement &&
+              (from.tagName === 'INPUT' || from.tagName === 'TEXTAREA' || from.tagName === 'SELECT')) return false;
+          // Skip identical nodes (preserves animations)
+          if (from.isEqualNode(to)) return false;
+          return true;
+        }
+      });
+    }
+
+    // ── Auth ──
+    let _authToken = new URLSearchParams(window.location.search).get('token')
+      || localStorage.getItem('relay_token')
+      || null;
+
+    function apiFetch(path, opts = {}) {
+      if (_authToken) {
+        opts.headers = opts.headers || {};
+        if (typeof opts.headers === 'object' && !Array.isArray(opts.headers)) {
+          opts.headers['Authorization'] = 'Bearer ' + _authToken;
+        }
+      }
+      return fetch(path, opts);
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const token = document.getElementById('auth-token').value.trim();
+      if (!token) return false;
+      _authToken = token;
+      document.getElementById('auth-error').textContent = '';
+      initApp();
+      return false;
+    }
+
+    function showAuth() {
+      document.getElementById('auth-overlay').hidden = false;
+      document.getElementById('auth-token').focus();
+    }
+
+    function hideAuth() {
+      document.getElementById('auth-overlay').hidden = true;
+      // Persist token for future visits
+      if (_authToken) localStorage.setItem('relay_token', _authToken);
+      // Clean token from URL if present
+      const url = new URL(location.href);
+      if (url.searchParams.has('token')) {
+        url.searchParams.delete('token');
+        history.replaceState(null, '', url.pathname + url.search);
+      }
+    }
+
+    function logout() {
+      _authToken = null;
+      localStorage.removeItem('relay_token');
+      showAuth();
+    }
+
     // ── State ──
     let sessions = [];
     let handoffs = [];
+    let selectedId = null;
+    let activeTab = 'sessions';
     let ws = null;
     let reconnectTimer = null;
-    const expandedSessions = new Set();
     const expandedHandoffs = new Set();
     const handoffCache = {};
+    const sessionDetailCache = {};  // session_id -> full detail (tool_uses, messages, etc.)
+    let detailFetchInFlight = null; // session_id being fetched
+    let orchestrationState = null;
+    let orchPollTimer = null;
+    const expandedTasks = new Set();
+    let orchPrUrl = null;
+    let projects = [];
+    let planHistory = [];
+    let selectedHistoryId = null;
+    let planMode = 'wizard'; // 'wizard' or 'toml'
+    let wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
+    let wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: true, project: '' };
+    let configAutoHandoff = false;
+    let configAutoCommit = false;
+    let configWorkspaces = [];
+    let serverUptime = null;
+    let uptimeFetchedAt = null;
 
     // ── Formatters ──
     function fmtAge(secs) {
@@ -376,10 +1687,24 @@
       return h + 'h' + (m ? m + 'm' : '');
     }
 
+    function fmtElapsed(secs) {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      if (h > 0) return h + 'h ' + m + 'm';
+      if (m > 0) return m + 'm';
+      return '<1m';
+    }
+
     function fmtCost(usd) {
       if (usd < 0.001) return '$0.00';
       if (usd < 0.01)  return '<$0.01';
       return '$' + usd.toFixed(2);
+    }
+
+    function fmtTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return String(n);
     }
 
     function fmtSize(bytes) {
@@ -387,10 +1712,22 @@
       return (bytes / 1024).toFixed(1) + 'KB';
     }
 
+    function fmtTime(iso) {
+      if (!iso) return '--:--:--';
+      const d = new Date(iso);
+      return d.toLocaleTimeString('en-US', { hour12: false });
+    }
+
     function ctxColor(pct) {
-      if (pct >= 85) return '#d17f7f';
-      if (pct >= 65) return '#d4b36a';
-      return '#7fd17f';
+      if (pct >= 85) return 'var(--red)';
+      if (pct >= 65) return 'var(--amber)';
+      return 'var(--green)';
+    }
+
+    function rateLimitColor(pct) {
+      if (pct >= 80) return 'var(--red)';
+      if (pct >= 60) return 'var(--amber)';
+      return 'var(--green)';
     }
 
     function dotClass(state) {
@@ -398,14 +1735,58 @@
                starting: 'dot-starting', ended: 'dot-ended', idle: 'dot-idle' }[state] || 'dot-idle';
     }
 
+    function stateColor(state) {
+      return { working: 'var(--green)', waiting: 'var(--amber)',
+               starting: 'var(--cyan)', ended: 'var(--red)', idle: 'var(--muted)' }[state] || 'var(--muted)';
+    }
+
     function modelShort(m) {
       return m.replace('claude-', '').replace(/-\d{8}$/, '').replace('-latest', '');
     }
 
-    function branchShort(b) {
-      if (!b) return '—';
-      const last = b.split('/').pop();
-      return last.length > 20 ? last.slice(0, 18) + '…' : last;
+    function truncCwd(cwd) {
+      if (!cwd) return '';
+      return cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+    }
+
+    function shortId(id) {
+      return id && id.length > 8 ? id.slice(0, 8) : (id || '');
+    }
+
+    function sparkline(values, maxLen) {
+      if (!values || !values.length) return '';
+      const chars = '\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
+      const data = maxLen && values.length > maxLen ? values.slice(-maxLen) : values;
+      const max = Math.max(...data);
+      if (max === 0) return chars[0].repeat(data.length);
+      return data.map(v => chars[Math.min(7, Math.floor((v / max) * 7.99))]).join('');
+    }
+
+    function renderBar(pct, width) {
+      width = width || 20;
+      const filled = Math.round(Math.min(100, pct) / 100 * width);
+      return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+    }
+
+    function toolColor(name) {
+      const n = (name || '').toLowerCase();
+      if (n === 'edit' || n === 'write' || n === 'notebookedit') return 'var(--amber)';
+      if (n === 'bash') return 'var(--green)';
+      if (n === 'read') return 'var(--dim)';
+      if (n === 'grep') return 'var(--cyan)';
+      if (n === 'glob') return 'var(--violet)';
+      return 'var(--text)';
+    }
+
+    function toolIcon(name) {
+      const n = (name || '').toLowerCase();
+      if (n === 'edit' || n === 'write') return '\u270E';
+      if (n === 'bash') return '\u276F';
+      if (n === 'read') return '\u25C7';
+      if (n === 'grep') return '\u2295';
+      if (n === 'glob') return '\u25C8';
+      if (n === 'agent') return '\u25C9';
+      return '\u25CB';
     }
 
     function esc(s) {
@@ -414,7 +1795,6 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Basic markdown → safe HTML (escapes first, then adds spans)
     function renderMd(md) {
       return esc(md)
         .replace(/^# (.+)$/gm,   '<span class="md-h1"># $1</span>')
@@ -424,69 +1804,523 @@
         .replace(/`([^`]+)`/g, '<code>$1</code>');
     }
 
-    // ── Render sessions ──
-    function renderSessions() {
-      const tbody = document.getElementById('sessions-body');
+    // ── Helpers ──
+    function getSelected() {
+      if (!selectedId) return null;
+      const summary = sessions.find(s => s.session_id === selectedId) || null;
+      if (!summary) return null;
+      const detail = sessionDetailCache[selectedId];
+      if (detail) return Object.assign({}, summary, detail);
+      return summary;
+    }
+
+    function hasDetail(s) {
+      return s && sessionDetailCache[s.session_id];
+    }
+
+    function autoSelect() {
+      if (sessions.length === 0) { selectedId = null; return; }
+      const running = sessions.find(s => s.state === 'working');
+      const newId = (running || sessions[0]).session_id;
+      selectedId = newId;
+      if (newId && !sessionDetailCache[newId]) {
+        fetchSessionDetail(newId);
+      }
+    }
+
+    function totalTok(s) {
+      return (s.total_input_tokens || 0) + (s.total_output_tokens || 0);
+    }
+
+    function toolsPerMin(s) {
+      const tools = s.tool_uses ? s.tool_uses.length : (s.tool_use_count || 0);
+      const mins = (s.age_secs || 0) / 60;
+      if (mins < 1) return tools.toFixed(1);
+      return (tools / mins).toFixed(1);
+    }
+
+    function getMessages(s) {
+      const msgs = [];
+      if (s.user_messages) {
+        for (const m of s.user_messages) msgs.push({ role: 'user', content: m.content, ts: m.timestamp });
+      }
+      if (s.assistant_messages) {
+        for (const m of s.assistant_messages) msgs.push({ role: 'assistant', content: m.content, ts: m.timestamp });
+      }
+      msgs.sort((a, b) => {
+        if (a.ts && b.ts) return a.ts.localeCompare(b.ts);
+        return 0;
+      });
+      return msgs;
+    }
+
+    function relPath(fp, cwd) {
+      if (cwd && fp.startsWith(cwd + '/')) return fp.slice(cwd.length + 1);
+      return fp;
+    }
+
+    function getFileMarker(s, fp) {
+      if (s.tool_uses) {
+        const base = fp.split('/').pop();
+        for (const t of s.tool_uses) {
+          if (t.name === 'Write' && t.input_summary.includes(base)) return 'A';
+        }
+      }
+      return 'M';
+    }
+
+    // ── Render ──
+    // ── Render coalescing ──
+    let _renderQueued = false;
+    function render() {
+      if (_renderQueued) return;
+      _renderQueued = true;
+      requestAnimationFrame(function() {
+        _renderQueued = false;
+        renderHeaderStats();
+        updateFooter();
+        if (activeTab === 'sessions') {
+          renderSessionList();
+          renderSessionDetail();
+          renderSessionMetrics();
+        }
+      });
+    }
+
+    function renderHeaderStats() {
+      let running = 0, waiting = 0, idle = 0, ended = 0, cost = 0, tok = 0;
+      for (const s of sessions) {
+        if (s.state === 'working') running++;
+        else if (s.state === 'waiting') waiting++;
+        else if (s.state === 'idle') idle++;
+        else if (s.state === 'ended') ended++;
+        cost += s.cost_usd || 0;
+        tok += totalTok(s);
+      }
+      const el = document.getElementById('header-stats');
+      const parts = [];
+      if (running) parts.push('<span class="stat-val" style="color:var(--green)">' + running + '</span> running');
+      if (waiting) parts.push('<span class="stat-val" style="color:var(--amber)">' + waiting + '</span> waiting');
+      if (idle)    parts.push('<span class="stat-val" style="color:var(--muted)">' + idle + '</span> idle');
+      if (ended)   parts.push('<span class="stat-val" style="color:var(--red)">' + ended + '</span> ended');
+      if (cost > 0) parts.push('<span class="stat-val">' + fmtCost(cost) + '</span>');
+      if (tok > 0)  parts.push('<span class="stat-val">' + fmtTokens(tok) + '</span> tok');
+      patchDOM(el, parts.join(' <span style="color:var(--border)">\u00b7</span> '));
+    }
+
+    function renderSessionList() {
+      const list = document.getElementById('session-list');
       if (!sessions.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty">No sessions found</td></tr>';
+        list.innerHTML = '<div class="empty">No sessions found</div>';
         return;
       }
 
       let html = '';
       for (const s of sessions) {
-        const isExpanded = expandedSessions.has(s.session_id);
-        const ctx = Math.round(s.context_pct);
-        const fill = Math.min(100, ctx);
+        const sel = s.session_id === selectedId ? ' selected' : '';
+        const tok = totalTok(s);
+        const ctxPct = Math.round(s.context_pct || 0);
 
-        html += `<tr class="session-row${isExpanded ? ' expanded' : ''}" data-id="${esc(s.session_id)}"
-          onclick="toggleSession('${esc(s.session_id)}')">
-          <td><span class="dot ${dotClass(s.state)}" title="${esc(s.state)}"></span></td>
-          <td title="${esc(s.project_name)}">${esc(s.project_name)}</td>
-          <td title="${esc(s.model)}">${esc(modelShort(s.model))}</td>
-          <td title="${esc(s.git_branch)}">${esc(branchShort(s.git_branch))}</td>
-          <td>${s.turn_count}</td>
-          <td>
-            <div class="ctx-bar">
-              <div class="ctx-track">
-                <div class="ctx-fill" style="width:${fill}%;background:${ctxColor(ctx)}"></div>
-              </div>
-              <span class="ctx-label">${ctx}%</span>
-            </div>
-          </td>
-          <td>${esc(fmtCost(s.cost_usd))}</td>
-          <td>${esc(fmtAge(s.age_secs))}</td>
-          <td class="td-action" onclick="event.stopPropagation()">
-            <button class="btn-handoff" onclick="saveHandoff(this,'${esc(s.session_id)}')">handoff</button>
-          </td>
-        </tr>`;
+        html += '<div class="session-card' + sel + '" data-id="' + esc(s.session_id) + '" onclick="selectSession(\'' + esc(s.session_id) + '\')">'
+          + '<div class="card-r1">'
+          + '<span class="dot ' + dotClass(s.state) + '"></span>'
+          + '<span class="card-project" title="' + esc(s.project_name) + '">' + esc(s.project_name) + '</span>'
+          + '<span class="card-sid">' + esc(shortId(s.session_id)) + '</span>'
+          + '</div>'
+          + '<div class="card-r2">'
+          + '<span class="card-state" style="color:' + stateColor(s.state) + '">' + esc(s.state) + '</span>'
+          + '<span class="card-cwd" title="' + esc(s.cwd || '') + '">' + esc(truncCwd(s.cwd)) + '</span>'
+          + '</div>'
+          + '<div class="card-r3">'
+          + '<span class="card-age">' + esc(fmtAge(s.age_secs)) + '</span>'
+          + '<span class="card-spark" style="color:' + ctxColor(ctxPct) + '">' + ctxPct + '%</span>'
+          + '<span class="card-tokens">' + esc(fmtTokens(tok)) + '</span>'
+          + '</div>'
+          + '</div>';
+      }
+      patchDOM(list, html);
+    }
 
-        if (isExpanded) {
-          html += `<tr class="detail-row"><td colspan="9">
-            <div style="display:flex;gap:20px;flex-wrap:wrap">
-              <div><span style="color:var(--muted)">id&nbsp;</span><span style="color:var(--cyan)">${esc(s.session_id)}</span></div>
-              <div><span style="color:var(--muted)">files&nbsp;</span><span style="color:var(--text)">${s.files_touched}</span></div>
-              <div><span style="color:var(--muted)">model&nbsp;</span><span style="color:var(--violet)">${esc(s.model)}</span></div>
-              <div><span style="color:var(--muted)">branch&nbsp;</span><span style="color:var(--amber)">${esc(s.git_branch || '—')}</span></div>
-            </div>
-          </td></tr>`;
+    function renderSessionDetail() {
+      const emptyEl = document.getElementById('detail-empty');
+      const contentEl = document.getElementById('detail-content');
+      const s = getSelected();
+
+      if (!s) {
+        emptyEl.style.display = 'flex';
+        contentEl.style.display = 'none';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'flex';
+
+      const tok = totalTok(s);
+      const ctxTok = s.current_context_tokens || 0;
+      const winTok = s.context_window_size || 0;
+      const hasFullDetail = !!(s.user_messages || s.assistant_messages);
+      const msgCount = hasFullDetail
+        ? (s.user_messages ? s.user_messages.length : 0) + (s.assistant_messages ? s.assistant_messages.length : 0)
+        : (s.user_message_count || 0) + (s.assistant_message_count || 0);
+
+      // Detail head
+      let html = '<div class="detail-head">'
+        + '<div class="detail-r1">'
+        + '<button class="mobile-back" onclick="mobileBackToList()">\u2190 Back</button>'
+        + '<span class="dot ' + dotClass(s.state) + '"></span>'
+        + '<span class="detail-project">' + esc(s.project_name) + '</span>'
+        + '<span class="detail-state" style="color:' + stateColor(s.state) + ';border-color:' + stateColor(s.state) + '">' + esc(s.state) + '</span>'
+        + '<span class="detail-actions">'
+        + '<button class="btn-handoff" onclick="saveHandoff(this,\'' + esc(s.session_id) + '\')">handoff</button>'
+        + '</span>'
+        + '</div>'
+        + '<div class="detail-r2">'
+        + esc(truncCwd(s.cwd));
+
+      if (s.git_branch) html += ' on <span class="branch">' + esc(s.git_branch) + '</span>';
+      html += ' \u00b7 msg #' + msgCount;
+      if (s.lines_added || s.lines_removed) {
+        html += ' \u00b7 <span class="added">+' + (s.lines_added || 0) + '</span>/<span class="removed">-' + (s.lines_removed || 0) + '</span>';
+      }
+      html += '</div></div>';
+
+      // KPI strip
+      html += '<div class="kpi-strip">'
+        + '<div class="kpi-box"><div class="kpi-label">Tokens</div><div class="kpi-value">'
+        + (winTok ? esc(fmtTokens(ctxTok)) + ' / ' + esc(fmtTokens(winTok)) : '\u2014')
+        + '</div></div>'
+        + '<div class="kpi-box"><div class="kpi-label">Cost</div><div class="kpi-value">' + esc(fmtCost(s.cost_usd || 0)) + '</div></div>'
+        + '<div class="kpi-box"><div class="kpi-label">Elapsed</div><div class="kpi-value">' + esc(fmtElapsed(s.age_secs || 0)) + '</div></div>'
+        + '<div class="kpi-box"><div class="kpi-label">Tools/min</div><div class="kpi-value">' + esc(toolsPerMin(s)) + '</div></div>'
+        + '</div>';
+
+      // Detail body grid: tools | files | prompts
+      html += '<div class="detail-body">';
+
+      // Tool timeline section
+      html += '<div class="detail-body-tools">'
+        + '<div class="tl-title">Tool Timeline</div>'
+        + '<div class="tl-body">';
+      if (!hasFullDetail) {
+        html += '<div class="empty" style="color:var(--muted)">Loading\u2026</div>';
+      } else {
+        const tools = [...(s.tool_uses || [])].reverse();
+        if (tools.length === 0) {
+          html += '<div class="empty">No tool calls yet</div>';
+        } else {
+          for (let ti = 0; ti < tools.length; ti++) {
+            const t = tools[ti];
+            const col = toolColor(t.name);
+            html += '<div class="tl-entry" data-id="tl-' + ti + '">'
+              + '<span class="tl-time">' + esc(fmtTime(t.timestamp)) + '</span>'
+              + '<span class="tl-name" style="color:' + col + '">' + esc(t.name) + '</span>'
+              + '<span class="tl-icon" style="color:' + col + '">' + toolIcon(t.name) + '</span>'
+              + '<span class="tl-input" title="' + esc(t.input_summary) + '">' + esc(t.input_summary) + '</span>'
+              + '</div>';
+          }
         }
       }
-      tbody.innerHTML = html;
+      html += '</div></div>';
+
+      // Files section
+      html += '<div class="detail-body-files">'
+        + '<div class="section-title">Files Changed</div>';
+      if (!hasFullDetail) {
+        html += '<div style="color:var(--muted);font-size:11px">Loading\u2026</div>';
+      } else {
+        const files = s.files_touched_paths || [];
+        if (files.length === 0) {
+          html += '<div style="color:var(--muted);font-size:11px">None</div>';
+        } else {
+          for (const f of files) {
+            const marker = getFileMarker(s, f);
+            const rel = relPath(f, s.cwd);
+            html += '<div class="file-entry">'
+              + '<span class="file-marker ' + (marker === 'A' ? 'file-marker-a' : 'file-marker-m') + '">' + marker + '</span>'
+              + '<span class="file-path" title="' + esc(f) + '">' + esc(rel) + '</span>'
+              + '</div>';
+          }
+        }
+      }
+      html += '</div>';
+
+      // Prompts section
+      html += '<div class="detail-body-prompts">'
+        + '<div class="section-title">Prompts</div>';
+      if (!hasFullDetail) {
+        html += '<div style="color:var(--muted);font-size:11px">Loading\u2026</div>';
+      } else {
+        const msgs = getMessages(s);
+        const lastMsgs = msgs.slice(-12);
+        if (lastMsgs.length === 0) {
+          html += '<div style="color:var(--muted);font-size:11px">No messages</div>';
+        } else {
+          for (const m of lastMsgs) {
+            const cls = m.role === 'user' ? 'msg-user' : 'msg-assistant';
+            const prefix = m.role === 'user' ? '\u25B8 ' : '\u25C2 ';
+            const content = m.content.length > 120 ? m.content.slice(0, 117) + '\u2026' : m.content;
+            html += '<div class="msg-entry ' + cls + '">'
+              + '<span class="msg-prefix">' + prefix + '</span>'
+              + esc(content)
+              + '</div>';
+          }
+        }
+      }
+      html += '</div>';
+
+      // Close detail body grid
+      html += '</div>';
+
+      patchDOM(contentEl, html);
     }
 
-    function toggleSession(id) {
-      if (expandedSessions.has(id)) expandedSessions.delete(id);
-      else expandedSessions.add(id);
-      renderSessions();
+    function renderSessionMetrics() {
+      const body = document.getElementById('metrics-body');
+      const s = getSelected();
+
+      if (!s) {
+        body.innerHTML = '<div class="empty">Select a session</div>';
+        return;
+      }
+
+      const tok = totalTok(s);
+      const throughput = s.age_secs > 0 ? (tok / s.age_secs).toFixed(1) : '0.0';
+      const spark = s.context_history ? sparkline(s.context_history, 24) : '';
+      const ctxTok = s.current_context_tokens || 0;
+      const winTok = s.context_window_size || 0;
+      const ctxPct = Math.round(s.context_pct || 0);
+
+      let html = '';
+
+      // Tokens/s throughput
+      html += '<div class="metric-group">'
+        + '<div class="metric-label">Tokens/s</div>'
+        + '<div class="metric-value">' + esc(throughput) + '<span class="unit"> tok/s</span>'
+        + (spark ? '<span class="metric-spark">' + esc(spark) + '</span>' : '')
+        + '</div></div>';
+
+      // Usage (rate limits)
+      html += '<div class="metric-group"><div class="metric-label">Usage</div>';
+      if (s.five_hour_used_pct != null) {
+        const pct5 = Math.round(s.five_hour_used_pct);
+        html += '<div class="rate-row">'
+          + '<span class="rate-label">5h</span>'
+          + '<span class="rate-bar" style="color:' + rateLimitColor(pct5) + '">' + renderBar(pct5, 20) + '</span>'
+          + '<span class="rate-pct">' + pct5 + '%</span>'
+          + '</div>';
+      }
+      if (s.seven_day_used_pct != null) {
+        const pct7 = Math.round(s.seven_day_used_pct);
+        html += '<div class="rate-row">'
+          + '<span class="rate-label">7d</span>'
+          + '<span class="rate-bar" style="color:' + rateLimitColor(pct7) + '">' + renderBar(pct7, 20) + '</span>'
+          + '<span class="rate-pct">' + pct7 + '%</span>'
+          + '</div>';
+      }
+      if (s.five_hour_used_pct == null && s.seven_day_used_pct == null) {
+        html += '<div style="color:var(--muted);font-size:11px">no live data</div>';
+      }
+      html += '</div>';
+
+      // Context window
+      html += '<div class="metric-group">'
+        + '<div class="metric-label">Context Window</div>'
+        + '<div class="ctx-detail">'
+        + (winTok ? esc(fmtTokens(ctxTok)) + ' / ' + esc(fmtTokens(winTok)) + '  ' + ctxPct + '%' : '\u2014')
+        + '</div>';
+      if (winTok) {
+        html += '<div class="ctx-full-bar" style="color:' + ctxColor(ctxPct) + '">' + renderBar(ctxPct, 30) + '</div>';
+      }
+      html += '</div>';
+
+      // Session cost
+      html += '<div class="metric-group">'
+        + '<div class="metric-label">Session Cost</div>'
+        + '<div class="metric-value">' + esc(fmtCost(s.cost_usd || 0)) + '</div>'
+        + '</div>';
+
+      // Compactions
+      if ((s.compaction_count || 0) > 0) {
+        html += '<div class="metric-group">'
+          + '<div class="compaction-badge">' + s.compaction_count + ' compaction' + (s.compaction_count > 1 ? 's' : '') + '</div>'
+          + '</div>';
+      }
+
+      // Activity log (compact)
+      html += '<div class="metric-group">'
+        + '<div class="metric-label">Activity</div>';
+      if (!s.tool_uses) {
+        html += '<div style="color:var(--muted);font-size:10px">Loading\u2026</div>';
+      } else {
+        const tools = [...s.tool_uses].reverse().slice(0, 20);
+        if (tools.length === 0) {
+          html += '<div style="color:var(--muted);font-size:10px">No activity</div>';
+        } else {
+          for (const t of tools) {
+            html += '<div class="activity-entry">'
+              + '<span class="activity-time">' + esc(fmtTime(t.timestamp)) + '</span>'
+              + '<span class="activity-name" style="color:' + toolColor(t.name) + '">' + esc(t.name) + '</span>'
+              + '</div>';
+          }
+        }
+      }
+      html += '</div>';
+
+      patchDOM(body, html);
     }
 
-    // ── Save handoff ──
+    function renderHandoffs() {
+      const view = document.getElementById('handoffs-view');
+      if (!handoffs.length) {
+        view.innerHTML = '<div class="empty">No handoffs saved</div>';
+        return;
+      }
+
+      let html = '';
+      for (const h of handoffs) {
+        const isExpanded = expandedHandoffs.has(h.id);
+        const cached = handoffCache[h.id];
+        const date = h.created_at ? h.created_at.slice(0, 10) : '';
+
+        html += '<div class="handoff-item" data-id="' + esc(h.id) + '">'
+          + '<div class="handoff-header" onclick="toggleHandoff(\'' + esc(h.id) + '\')">'
+          + '<div class="handoff-id">' + esc(h.id) + '</div>'
+          + '<div class="handoff-meta">' + esc(fmtSize(h.size_bytes)) + (date ? ' \u00b7 ' + esc(date) : '') + '</div>'
+          + (h.preview ? '<div class="handoff-preview">' + esc(h.preview) + '</div>' : '')
+          + '</div>'
+          + '<div class="handoff-content' + (isExpanded ? ' visible' : '') + '" id="hc-' + esc(h.id) + '">'
+          + (isExpanded ? (cached ? renderMd(cached) : '<span style="color:var(--muted)">Loading\u2026</span>') : '')
+          + '</div></div>';
+      }
+      patchDOM(view, html);
+    }
+
+    function updateFooter() {
+      const s = sessions.length;
+      const h = handoffs.length;
+      document.getElementById('footer-counts').textContent =
+        s + ' session' + (s !== 1 ? 's' : '') + ' \u00b7 ' + h + ' handoff' + (h !== 1 ? 's' : '');
+      document.getElementById('footer-updated').textContent =
+        'updated ' + new Date().toLocaleTimeString();
+      const upEl = document.getElementById('footer-uptime');
+      if (upEl) {
+        const up = serverUptime != null ? serverUptime + (Date.now() - uptimeFetchedAt) / 1000 : null;
+        upEl.textContent = up != null ? 'up ' + fmtElapsed(Math.floor(up)) : '';
+      }
+    }
+
+    // ── Mobile helpers ──
+    function isMobile() {
+      return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function mobileShowDetail() {
+      const layout = document.getElementById('sessions-view');
+      if (isMobile() && layout) layout.classList.add('mobile-detail');
+    }
+
+    function mobileBackToList() {
+      const layout = document.getElementById('sessions-view');
+      if (layout) layout.classList.remove('mobile-detail');
+    }
+
+    function togglePlansSidebar() {
+      const sidebar = document.querySelector('.plans-sidebar');
+      if (!sidebar) return;
+      sidebar.classList.toggle('collapsed');
+      const btn = sidebar.querySelector('.plans-sidebar-toggle');
+      if (btn) btn.textContent = sidebar.classList.contains('collapsed') ? 'History \u25BC' : 'History \u25B2';
+    }
+
+    // ── Events ──
+    function selectSession(id) {
+      selectedId = id;
+      renderSessionList();
+      renderSessionDetail();
+      renderSessionMetrics();
+      if (id) mobileShowDetail();
+      // Fetch full detail on demand if not cached
+      if (id && !sessionDetailCache[id]) {
+        fetchSessionDetail(id);
+      }
+    }
+
+    async function fetchSessionDetail(id) {
+      if (detailFetchInFlight === id) return;
+      detailFetchInFlight = id;
+      try {
+        const res = await apiFetch('/api/sessions/' + encodeURIComponent(id));
+        if (res.ok) {
+          const data = await res.json();
+          sessionDetailCache[id] = {
+            tool_uses: data.tool_uses || [],
+            files_touched_paths: data.files_touched_paths || [],
+            user_messages: data.user_messages || [],
+            assistant_messages: data.assistant_messages || [],
+            context_history: data.context_history || [],
+          };
+          // Re-render if still selected
+          if (selectedId === id) {
+            renderSessionDetail();
+            renderSessionMetrics();
+          }
+        }
+      } catch (e) {
+        console.error('fetchSessionDetail failed:', e);
+      } finally {
+        if (detailFetchInFlight === id) detailFetchInFlight = null;
+      }
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+      document.getElementById('sessions-view').style.display = tab === 'sessions' ? 'grid' : 'none';
+      document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
+      document.getElementById('plans-view').style.display = tab === 'plans' ? 'block' : 'none';
+      if (tab === 'sessions') {
+        renderSessionList();
+        renderSessionDetail();
+        renderSessionMetrics();
+      }
+      if (tab === 'handoffs') renderHandoffs();
+      if (tab === 'plans') renderOrchestration(true);
+    }
+
+    async function toggleHandoff(id) {
+      if (expandedHandoffs.has(id)) {
+        expandedHandoffs.delete(id);
+        renderHandoffs();
+        return;
+      }
+      expandedHandoffs.add(id);
+      renderHandoffs();
+      if (!handoffCache[id]) {
+        try {
+          const res = await apiFetch('/api/handoffs/' + encodeURIComponent(id));
+          if (res.ok) {
+            handoffCache[id] = await res.text();
+            const el = document.getElementById('hc-' + id);
+            if (el) el.innerHTML = renderMd(handoffCache[id]);
+          } else {
+            const el = document.getElementById('hc-' + id);
+            if (el) el.innerHTML = '<span style="color:var(--red)">Failed to load</span>';
+          }
+        } catch (_) {
+          const el = document.getElementById('hc-' + id);
+          if (el) el.innerHTML = '<span style="color:var(--red)">Network error</span>';
+        }
+      }
+    }
+
     async function saveHandoff(btn, id) {
       btn.className = 'btn-handoff saving';
-      btn.textContent = '…';
+      btn.textContent = '\u2026';
       btn.disabled = true;
       try {
-        const res = await fetch('/api/sessions/' + encodeURIComponent(id) + '/handoff', { method: 'POST' });
+        const res = await apiFetch('/api/sessions/' + encodeURIComponent(id) + '/handoff', { method: 'POST' });
         if (res.ok) {
           btn.className = 'btn-handoff saved';
           btn.textContent = 'saved';
@@ -505,60 +2339,6 @@
       }
     }
 
-    // ── Render handoffs ──
-    function renderHandoffs() {
-      const list = document.getElementById('handoffs-list');
-      if (!handoffs.length) {
-        list.innerHTML = '<div class="empty">No handoffs saved</div>';
-        return;
-      }
-
-      let html = '';
-      for (const h of handoffs) {
-        const isExpanded = expandedHandoffs.has(h.id);
-        const cached = handoffCache[h.id];
-        const date = h.created_at ? h.created_at.slice(0, 10) : '';
-
-        html += `<div class="handoff-item">
-          <div class="handoff-header" onclick="toggleHandoff('${esc(h.id)}')">
-            <div class="handoff-id">${esc(h.id)}</div>
-            <div class="handoff-meta">${esc(fmtSize(h.size_bytes))}${date ? ' · ' + esc(date) : ''}</div>
-            ${h.preview ? `<div class="handoff-preview">${esc(h.preview)}</div>` : ''}
-          </div>
-          <div class="handoff-content${isExpanded ? ' visible' : ''}" id="hc-${esc(h.id)}">
-            ${isExpanded ? (cached ? renderMd(cached) : '<span style="color:var(--muted)">Loading…</span>') : ''}
-          </div>
-        </div>`;
-      }
-      list.innerHTML = html;
-    }
-
-    async function toggleHandoff(id) {
-      if (expandedHandoffs.has(id)) {
-        expandedHandoffs.delete(id);
-        renderHandoffs();
-        return;
-      }
-      expandedHandoffs.add(id);
-      renderHandoffs();
-      if (!handoffCache[id]) {
-        try {
-          const res = await fetch('/api/handoffs/' + encodeURIComponent(id));
-          if (res.ok) {
-            handoffCache[id] = await res.text();
-            const el = document.getElementById('hc-' + id);
-            if (el) el.innerHTML = renderMd(handoffCache[id]);
-          } else {
-            const el = document.getElementById('hc-' + id);
-            if (el) el.innerHTML = '<span style="color:var(--red)">Failed to load</span>';
-          }
-        } catch (_) {
-          const el = document.getElementById('hc-' + id);
-          if (el) el.innerHTML = '<span style="color:var(--red)">Network error</span>';
-        }
-      }
-    }
-
     // ── WebSocket ──
     function setWsStatus(status) {
       document.getElementById('ws-dot').className = 'ws-dot ' + status;
@@ -569,7 +2349,8 @@
 
     function connectWs() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(proto + '//' + location.host + '/api/ws');
+      const wsUrl = proto + '//' + location.host + '/api/ws' + (_authToken ? '?token=' + encodeURIComponent(_authToken) : '');
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         setWsStatus('connected');
@@ -591,65 +2372,948 @@
           case 'snapshot':
             sessions = msg.sessions || [];
             handoffs = msg.handoffs || [];
-            renderSessions();
-            renderHandoffs();
-            updateFooter();
+            if (!selectedId) autoSelect();
+            render();
+            if (activeTab === 'handoffs') renderHandoffs();
             break;
           case 'sessions_updated':
             sessions = msg.sessions || [];
-            renderSessions();
-            updateFooter();
+            if (selectedId && !sessions.find(s => s.session_id === selectedId)) autoSelect();
+            render();
+            // Re-fetch detail for selected session if it's active (working/waiting)
+            // Don't delete the cache first — keep stale data visible until fresh data arrives
+            if (selectedId) {
+              const sel = sessions.find(s => s.session_id === selectedId);
+              if (sel && (sel.state === 'working' || sel.state === 'starting')) {
+                detailFetchInFlight = null; // allow re-fetch even if one was in flight
+                fetchSessionDetail(selectedId);
+              }
+            }
             break;
           case 'handoff_created':
+            notifyHandoff(msg);
             await fetchHandoffs();
             break;
+          case 'orchestration_updated': {
+            if (orchDismissed) break;
+            const snap = msg.orchestration || msg.snapshot || msg;
+            if (!snap || !snap.plan_name) break;
+            const prevState = orchestrationState ? orchestrationState.state : null;
+            orchestrationState = snap;
+            if (orchestrationState.state !== prevState) {
+              notifyOrchStateChange(orchestrationState.state);
+            }
+            renderOrchestration();
+            break;
+          }
           case 'resync':
             sessions = msg.sessions || [];
             handoffs = msg.handoffs || [];
-            renderSessions();
-            renderHandoffs();
-            updateFooter();
+            if (selectedId && !sessions.find(s => s.session_id === selectedId)) autoSelect();
+            render();
+            if (activeTab === 'handoffs') renderHandoffs();
             break;
         }
       };
     }
 
-    // ── HTTP fetches ──
+    // ── HTTP ──
     async function fetchSessions() {
-      const res = await fetch('/api/sessions');
-      sessions = await res.json();
-      renderSessions();
-      updateFooter();
+      try {
+        const res = await apiFetch('/api/sessions');
+        if (res.ok) {
+          sessions = await res.json();
+          if (!selectedId) autoSelect();
+          render();
+        } else {
+          document.getElementById('session-list').innerHTML = '<div class="empty">API error: ' + res.status + '</div>';
+        }
+      } catch (e) {
+        console.error('fetchSessions failed:', e);
+        document.getElementById('session-list').innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>';
+      }
     }
 
     async function fetchHandoffs() {
-      const res = await fetch('/api/handoffs');
-      handoffs = await res.json();
-      renderHandoffs();
+      try {
+        const res = await apiFetch('/api/handoffs');
+        if (res.ok) {
+          handoffs = await res.json();
+          updateFooter();
+          if (activeTab === 'handoffs') renderHandoffs();
+        }
+      } catch (e) {
+        console.error('fetchHandoffs failed:', e);
+      }
     }
 
     async function fetchVersion() {
       try {
-        const data = await fetch('/api/health').then(r => r.json());
+        const data = await apiFetch('/api/health').then(r => r.json());
         document.getElementById('version').textContent = 'v' + data.version;
+        serverUptime = data.uptime_secs || data.uptime || null;
+        uptimeFetchedAt = Date.now();
       } catch (_) {}
     }
 
-    function updateFooter() {
-      const s = sessions.length;
-      const h = handoffs.length;
-      document.getElementById('footer-counts').textContent =
-        s + ' session' + (s !== 1 ? 's' : '') + ' · ' + h + ' handoff' + (h !== 1 ? 's' : '');
-      document.getElementById('footer-updated').textContent =
-        'updated ' + new Date().toLocaleTimeString();
+    // ── Orchestration ──
+    function orchStateColor(state) {
+      if (state === 'running')   return 'var(--green)';
+      if (state === 'completed') return 'var(--green)';
+      if (state === 'failed')    return 'var(--red)';
+      if (state === 'aborted')   return 'var(--amber)';
+      return 'var(--muted)';
     }
 
+    function taskStatusIcon(status) {
+      switch (status) {
+        case 'pending':  return '\u25CC'; // ◌
+        case 'blocked':  return '\u2298'; // ⊘
+        case 'running':  return '\u25CF'; // ●
+        case 'done':     return '\u2713'; // ✓
+        case 'failed':   return '\u2717'; // ✗
+        default:         return '\u25CB'; // ○
+      }
+    }
+
+    let orchViewMode = null; // 'monitor' or 'launch'
+
+    function renderOrchestration(force) {
+      const view = document.getElementById('plans-view');
+
+      // Build the two-panel layout
+      let html = '<div class="plans-layout">';
+
+      // Left sidebar: history
+      html += '<div class="plans-sidebar collapsed">';
+      html += '<button class="plans-sidebar-toggle" onclick="togglePlansSidebar()">History \u25BC</button>';
+      html += '<div class="col-title">History</div>';
+      html += '<button class="btn-new-plan" onclick="showNewPlan()">+ New Plan</button>';
+      html += '<div class="plans-sidebar-body">';
+
+      // Active orchestration at top (if any)
+      const hasActive = !!(orchestrationState && orchestrationState.plan_name);
+      if (hasActive) {
+        const s = orchestrationState;
+        const stCol = orchStateColor(s.state);
+        const isSelected = !selectedHistoryId && !orchDismissed;
+        html += '<div class="plan-history-item' + (isSelected ? ' selected' : '') + '" data-id="active" onclick="selectActivePlan()">'
+          + '<div class="phi-name">' + esc(s.plan_name) + '</div>'
+          + '<div class="phi-meta">'
+          + '<span class="phi-state" style="color:' + stCol + '">' + esc(s.state) + '</span>'
+          + '<span>' + fmtElapsed(s.elapsed_secs || 0) + '</span>'
+          + '</div></div>';
+      }
+
+      // Historical entries (skip active plan to avoid duplicates)
+      const activeName = hasActive ? orchestrationState.plan_name : null;
+      for (const h of planHistory) {
+        if (activeName && h.plan_name === activeName) continue;
+        const isSelected = selectedHistoryId === h.id;
+        const stCol = orchStateColor(h.state);
+        const date = h.completed_at ? h.completed_at.slice(0, 10) : '';
+        html += '<div class="plan-history-item' + (isSelected ? ' selected' : '') + '" data-id="' + esc(h.id) + '" onclick="selectHistoryPlan(\'' + esc(h.id) + '\')">'
+          + '<div class="phi-name">' + esc(h.plan_name) + '</div>'
+          + '<div class="phi-meta">'
+          + '<span class="phi-state" style="color:' + stCol + '">' + esc(h.state) + '</span>'
+          + '<span>' + esc(h.done_count + '/' + h.task_count) + '</span>'
+          + '<span>' + esc(date) + '</span>'
+          + '</div></div>';
+      }
+
+      if (!planHistory.length && !hasActive) {
+        html += '<div class="empty" style="padding:12px;font-size:11px">No plan history</div>';
+      }
+
+      html += '</div></div>'; // close sidebar-body + sidebar
+
+      // Right main area
+      html += '<div class="plans-main">';
+
+      if (selectedHistoryId) {
+        html += '<div id="history-detail"><div class="empty">Loading\u2026</div></div>';
+      } else if (hasActive && !orchDismissed) {
+        html += renderOrchMonitorHtml();
+      } else {
+        html += renderOrchLaunchHtml();
+      }
+
+      html += '</div>'; // close main
+      html += '</div>'; // close layout
+
+      patchDOM(view, html);
+
+      // If viewing history detail, fetch it
+      if (selectedHistoryId) {
+        fetchHistoryDetail(selectedHistoryId);
+      }
+    }
+
+    function showNewPlan() {
+      selectedHistoryId = null;
+      orchDismissed = true;
+      renderOrchestration(true);
+    }
+
+    function selectActivePlan() {
+      selectedHistoryId = null;
+      orchDismissed = false;
+      renderOrchestration(true);
+    }
+
+    function selectHistoryPlan(id) {
+      selectedHistoryId = id;
+      renderOrchestration(true);
+    }
+
+    async function fetchHistoryDetail(id) {
+      try {
+        const res = await apiFetch('/api/plans/history/' + encodeURIComponent(id));
+        if (res.ok) {
+          const entry = await res.json();
+          const container = document.getElementById('history-detail');
+          if (container) {
+            container.innerHTML = renderOrchMonitorHtml(entry.snapshot, true, entry);
+          }
+        }
+      } catch (_) {}
+    }
+
+    function projectOptions(selected) {
+      let opts = '<option value=""' + (!selected || selected === '__new__' ? '' : ' selected') + '>server cwd (default)</option>';
+      for (const p of projects) {
+        const sel = selected === p.project_path ? ' selected' : '';
+        opts += '<option value="' + esc(p.project_path) + '"' + sel + '>'
+          + esc(p.project_name) + ' \u2014 ' + esc(p.project_path)
+          + (p.session_count ? ' (' + p.session_count + ')' : '') + '</option>';
+      }
+      opts += '<option value="__new__"' + (selected === '__new__' ? ' selected' : '') + '>\u2795 New project\u2026</option>';
+      return opts;
+    }
+
+    function renderNewProjectInput() {
+      if (configWorkspaces.length > 0) {
+        let wsOpts = '';
+        for (const w of configWorkspaces) {
+          wsOpts += '<option value="' + esc(w) + '">' + esc(w) + '</option>';
+        }
+        return '<div class="new-project-row">'
+          + '<select id="wz-new-ws">' + wsOpts + '</select>'
+          + '<span style="color:var(--dim)">/</span>'
+          + '<input id="wz-new-name" placeholder="project-name">'
+          + '</div>';
+      }
+      return '<div class="new-project-row">'
+        + '<input id="wz-new-path" placeholder="/absolute/path/to/new/project" style="flex:1">'
+        + '</div>';
+    }
+
+    function getNewProjectPath() {
+      if (configWorkspaces.length > 0) {
+        const ws = (document.getElementById('wz-new-ws') || {}).value || '';
+        const name = (document.getElementById('wz-new-name') || {}).value || '';
+        if (!ws || !name.trim()) return null;
+        return ws.replace(/\/$/, '') + '/' + name.trim();
+      }
+      const path = (document.getElementById('wz-new-path') || {}).value || '';
+      return path.trim() || null;
+    }
+
+    function onProjectChange() {
+      const sel = document.getElementById('plan-project');
+      const area = document.getElementById('new-project-area');
+      if (sel && area) {
+        area.innerHTML = sel.value === '__new__' ? renderNewProjectInput() : '';
+      }
+    }
+
+    function renderOrchLaunchHtml() {
+      const modeW = planMode === 'wizard' ? ' active' : '';
+      const modeT = planMode === 'toml' ? ' active' : '';
+
+      let html = '<div class="plan-launch">'
+        + '<div class="plan-mode-tabs">'
+        + '<button class="plan-mode-btn' + modeW + '" onclick="setPlanMode(\'wizard\')">Wizard</button>'
+        + '<button class="plan-mode-btn' + modeT + '" onclick="setPlanMode(\'toml\')">TOML</button>'
+        + '</div>';
+
+      if (planMode === 'toml') {
+        html += '<label>Project</label>'
+          + '<select id="plan-project">' + projectOptions() + '</select>'
+          + '<label>Plan TOML</label>'
+          + '<textarea id="plan-toml-input" placeholder="[plan]\nname = &quot;my-plan&quot;\nbranch = &quot;feat/my-plan&quot;\n\n[[tasks]]\nname = &quot;task-1&quot;\nprompt = &quot;...&quot;"></textarea>'
+          + '<button class="btn-launch" id="btn-launch" onclick="launchPlan()">Launch</button>'
+          + '<div class="plan-error" id="plan-error"></div>';
+      } else {
+        html += renderWizardForm();
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    function setPlanMode(mode) {
+      // Save wizard state before switching
+      if (planMode === 'wizard') saveWizardState();
+      planMode = mode;
+      renderOrchestration(true);
+    }
+
+    function saveWizardState() {
+      // Save plan meta
+      const wzName = document.getElementById('wz-name');
+      if (wzName) {
+        wizardPlan.name = wzName.value;
+        wizardPlan.branch = (document.getElementById('wz-branch') || {}).value || '';
+        wizardPlan.model = (document.getElementById('wz-model') || {}).value || '';
+        wizardPlan.on_complete = (document.getElementById('wz-oncomplete') || {}).value || 'manual';
+        wizardPlan.skip_permissions = (document.getElementById('wz-skip-perms') || {}).checked || false;
+        wizardPlan.project = (document.getElementById('plan-project') || {}).value || '';
+      }
+      // Save tasks
+      const tasks = [];
+      let i = 0;
+      while (true) {
+        const nameEl = document.getElementById('wt-name-' + i);
+        if (!nameEl) break;
+        tasks.push({
+          name: nameEl.value,
+          prompt: (document.getElementById('wt-prompt-' + i) || {}).value || '',
+          model: (document.getElementById('wt-model-' + i) || {}).value || '',
+          depends_on: (document.getElementById('wt-deps-' + i) || {}).value || '',
+          allowed_tools: (document.getElementById('wt-tools-' + i) || {}).value || '',
+        });
+        i++;
+      }
+      if (tasks.length) wizardTasks = tasks;
+    }
+
+    function renderWizardForm() {
+      let html = '<div class="wizard-form">';
+
+      // Plan meta
+      const wp = wizardPlan;
+      const ocSel = function(v) { return v === wp.on_complete ? ' selected' : ''; };
+      html += '<div class="wizard-section-title">Plan</div>'
+        + '<div class="field-row">'
+        + '<div class="field-group"><label>Name</label><input id="wz-name" placeholder="my-plan" value="' + esc(wp.name) + '"></div>'
+        + '<div class="field-group"><label>Branch</label><input id="wz-branch" placeholder="defaults to name" value="' + esc(wp.branch) + '"></div>'
+        + '</div>'
+        + '<div class="field-row">'
+        + '<div class="field-group"><label>Model</label><input id="wz-model" placeholder="e.g. claude-sonnet-4-6" value="' + esc(wp.model) + '"></div>'
+        + '<div class="field-group"><label>On complete</label>'
+        + '<select id="wz-oncomplete"><option value="manual"' + ocSel('manual') + '>manual</option><option value="merge"' + ocSel('merge') + '>merge</option><option value="pr"' + ocSel('pr') + '>pr</option></select></div>'
+        + '</div>'
+        + '<div class="field-group"><label>Project</label><select id="plan-project" onchange="onProjectChange()">' + projectOptions(wp.project) + '</select></div>'
+        + '<div id="new-project-area">' + (wp.project === '__new__' ? renderNewProjectInput() : '') + '</div>'
+        + '<div class="wizard-toggle-row">'
+        + '<input type="checkbox" id="wz-skip-perms"' + (wp.skip_permissions ? ' checked' : '') + '><label for="wz-skip-perms">Autonomous mode (skip permission prompts)</label>'
+        + '</div>';
+
+      // Tasks
+      html += '<div class="wizard-section-title">Tasks</div>';
+      for (let i = 0; i < wizardTasks.length; i++) {
+        const t = wizardTasks[i];
+        html += '<div class="wizard-task">'
+          + '<div class="task-head">'
+          + '<span class="task-num">#' + (i + 1) + '</span>'
+          + '<input id="wt-name-' + i + '" placeholder="task-name" value="' + esc(t.name) + '">'
+          + (wizardTasks.length > 1 ? '<button class="btn-remove-task" onclick="removeWizardTask(' + i + ')" title="Remove">\u00d7</button>' : '')
+          + '</div>'
+          + '<div class="field-group"><label>Prompt</label>'
+          + '<textarea id="wt-prompt-' + i + '" placeholder="What should Claude do?">' + esc(t.prompt) + '</textarea></div>'
+          + '<div class="field-row">'
+          + '<div class="field-group"><label>Model</label><input id="wt-model-' + i + '" placeholder="inherit plan model" value="' + esc(t.model) + '"></div>'
+          + '<div class="field-group"><label>Depends on</label><input id="wt-deps-' + i + '" placeholder="task-1, task-2" value="' + esc(t.depends_on) + '"></div>'
+          + '</div>'
+          + '<div class="field-group"><label>Allowed tools</label><input id="wt-tools-' + i + '" placeholder="e.g. Read,Grep,Edit" value="' + esc(t.allowed_tools) + '"></div>'
+          + '</div>';
+      }
+      html += '<button class="btn-add-task" onclick="addWizardTask()">+ Add task</button>';
+
+      // Launch
+      html += '<button class="btn-launch" id="btn-launch" onclick="launchWizard()">Launch</button>'
+        + '<div class="plan-error" id="plan-error"></div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    function addWizardTask() {
+      saveWizardState();
+      wizardTasks.push({ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' });
+      renderOrchestration(true);
+    }
+
+    function removeWizardTask(idx) {
+      saveWizardState();
+      wizardTasks.splice(idx, 1);
+      renderOrchestration(true);
+    }
+
+    function wizardToToml() {
+      const name = (document.getElementById('wz-name') || {}).value || '';
+      const branch = (document.getElementById('wz-branch') || {}).value || '';
+      const model = (document.getElementById('wz-model') || {}).value || '';
+      const onComplete = (document.getElementById('wz-oncomplete') || {}).value || 'manual';
+      const skipPerms = (document.getElementById('wz-skip-perms') || {}).checked || false;
+
+      if (!name.trim()) return { error: 'Plan name is required' };
+
+      saveWizardState();
+      const tasks = wizardTasks.filter(t => t.name.trim());
+      if (!tasks.length) return { error: 'At least one task is required' };
+      for (const t of tasks) {
+        if (!t.prompt.trim()) return { error: 'Task "' + t.name + '" needs a prompt' };
+      }
+
+      let toml = '[plan]\n';
+      toml += 'name = "' + name.trim() + '"\n';
+      toml += 'branch = "' + (branch.trim() || name.trim()) + '"\n';
+      if (model.trim()) toml += 'model = "' + model.trim() + '"\n';
+      toml += 'on_complete = "' + onComplete + '"\n';
+      if (skipPerms) toml += 'skip_permissions = true\n';
+
+      for (const t of tasks) {
+        toml += '\n[[tasks]]\n';
+        toml += 'name = "' + t.name.trim() + '"\n';
+        if (t.prompt.includes('\n')) {
+          toml += "prompt = '''\n" + t.prompt + "\n'''\n";
+        } else {
+          toml += 'prompt = "' + t.prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"\n';
+        }
+        if (t.model.trim()) toml += 'model = "' + t.model.trim() + '"\n';
+        const deps = t.depends_on.split(',').map(d => d.trim()).filter(Boolean);
+        if (deps.length) toml += 'depends_on = [' + deps.map(d => '"' + d + '"').join(', ') + ']\n';
+        if (t.allowed_tools.trim()) toml += 'allowed_tools = "' + t.allowed_tools.trim() + '"\n';
+      }
+
+      return { toml };
+    }
+
+    async function launchWizard() {
+      const errEl = document.getElementById('plan-error');
+      const btn = document.getElementById('btn-launch');
+      const result = wizardToToml();
+      if (result.error) { errEl.textContent = result.error; return; }
+
+      const projectSelect = document.getElementById('plan-project');
+      btn.classList.add('loading');
+      btn.textContent = 'Launching\u2026';
+      errEl.textContent = '';
+
+      const body = { plan_toml: result.toml };
+      if (projectSelect && projectSelect.value === '__new__') {
+        const newPath = getNewProjectPath();
+        if (!newPath) { errEl.textContent = 'Enter a path for the new project'; btn.classList.remove('loading'); btn.textContent = 'Launch'; return; }
+        body.project_root = newPath;
+      } else if (projectSelect && projectSelect.value) {
+        body.project_root = projectSelect.value;
+      }
+
+      try {
+        const res = await apiFetch('/api/orchestrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchestrationState = data.snapshot || data;
+          orchPrUrl = null;
+          orchDismissed = false;
+          wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
+          wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: true, project: '' };
+          renderOrchestration();
+        } else {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          errEl.textContent = rb.error || rb.message || 'Launch failed (' + res.status + ')';
+          btn.classList.remove('loading');
+          btn.textContent = 'Launch';
+        }
+      } catch (e) {
+        errEl.textContent = 'Network error: ' + e.message;
+        btn.classList.remove('loading');
+        btn.textContent = 'Launch';
+      }
+    }
+
+    function renderOrchMonitorHtml(snapshotOverride, readOnly, relaunchData) {
+      const s = snapshotOverride || orchestrationState;
+      if (!s) return '<div class="empty">No orchestration data</div>';
+      const stateCol = orchStateColor(s.state);
+      const counts = s.counts || {};
+
+      // Header bar
+      let html = '<div class="plan-monitor">'
+        + '<div class="plan-header-bar">'
+        + '<span class="plan-name">' + esc(s.plan_name || 'Plan') + '</span>';
+      if (s.branch) html += '<span class="plan-branch">' + esc(s.branch) + '</span>';
+      html += '<span class="plan-state-badge" style="color:' + stateCol + ';border-color:' + stateCol + '">' + esc(s.state || '?') + '</span>'
+        + '<span class="plan-elapsed">' + esc(fmtElapsed(s.elapsed_secs || 0)) + '</span>';
+
+      // Counts
+      const parts = [];
+      if (counts.done != null)    parts.push('<span class="cnt-val">' + counts.done + '</span>/' + (s.tasks ? s.tasks.length : 0) + ' done');
+      if (counts.running != null && counts.running > 0) parts.push('<span class="cnt-val">' + counts.running + '</span> running');
+      if (counts.blocked != null && counts.blocked > 0) parts.push('<span class="cnt-val">' + counts.blocked + '</span> blocked');
+      if (counts.failed != null && counts.failed > 0)   parts.push('<span class="cnt-val" style="color:var(--red)">' + counts.failed + '</span> failed');
+      if (counts.pending != null && counts.pending > 0) parts.push('<span class="cnt-val">' + counts.pending + '</span> pending');
+      if (parts.length) {
+        html += '<span class="plan-counts">' + parts.join(' \u00b7 ') + '</span>';
+      }
+      html += '</div>';
+
+      // Task list
+      html += '<div class="task-list">';
+      const tasks = s.tasks || [];
+      if (tasks.length === 0) {
+        html += '<div class="empty">No tasks</div>';
+      } else {
+        for (const t of tasks) {
+          const isExpanded = expandedTasks.has(t.name);
+          html += '<div class="task-card" data-id="' + esc(t.name) + '" onclick="toggleTask(\'' + esc(t.name) + '\')">'
+            + '<div class="task-row">'
+            + '<span class="task-status-icon ' + esc(t.status) + '">' + taskStatusIcon(t.status) + '</span>'
+            + '<span class="task-name">' + esc(t.name) + '</span>';
+          if (t.elapsed_secs != null) {
+            html += '<span class="task-elapsed">' + esc(fmtElapsed(t.elapsed_secs)) + '</span>';
+          }
+          html += '</div>';
+
+          // Dependencies
+          if (t.depends_on && t.depends_on.length) {
+            html += '<div class="task-deps">depends on: ' + t.depends_on.map(d => esc(d)).join(', ') + '</div>';
+          }
+
+          // Output (expandable)
+          html += '<div class="task-output' + (isExpanded ? ' visible' : '') + '">';
+          if (t.output_tail && t.output_tail.length) {
+            html += '<pre>' + esc(t.output_tail.join('\n')) + '</pre>';
+          } else if (isExpanded) {
+            html += '<pre style="color:var(--muted)">No output yet</pre>';
+          }
+          if (t.exit_code != null) {
+            const ecCls = t.exit_code === 0 ? 'success' : 'failure';
+            html += '<div class="task-exit-code ' + ecCls + '">exit code: ' + t.exit_code + '</div>';
+          }
+          html += '</div></div>';
+        }
+      }
+      html += '</div>';
+
+      // Action bar (omit for read-only / historical views)
+      html += '<div class="plan-actions">';
+      if (!readOnly) {
+        const st = s.state || '';
+        if (st === 'running') {
+          html += '<button class="btn-plan abort" onclick="orchAbort(this)">Abort</button>';
+        }
+        if (st === 'completed') {
+          html += '<button class="btn-plan merge" onclick="orchMerge(this)">Merge</button>';
+          html += '<button class="btn-plan pr" onclick="orchPr(this)">Create PR</button>';
+        }
+        if (st === 'failed' || st === 'aborted') {
+          html += '<button class="btn-plan merge" onclick="orchRelaunch(this)">Relaunch</button>';
+        }
+        if (st === 'completed' || st === 'failed' || st === 'aborted') {
+          html += '<button class="btn-plan newplan" onclick="orchReset()">New Plan</button>';
+        }
+        if (orchPrUrl) {
+          html += '<span class="pr-url"><a href="' + esc(orchPrUrl) + '" target="_blank">' + esc(orchPrUrl) + '</a></span>';
+        }
+      }
+      if (readOnly && relaunchData) {
+        const st = relaunchData.state || '';
+        if (st === 'failed' || st === 'aborted') {
+          html += '<button class="btn-plan merge" onclick="relaunchFromHistory(\'' + esc(relaunchData.id) + '\', this)">Relaunch</button>';
+        }
+      }
+      html += '</div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    function toggleTask(name) {
+      if (expandedTasks.has(name)) expandedTasks.delete(name);
+      else expandedTasks.add(name);
+      renderOrchestration(true);
+    }
+
+    async function launchPlan() {
+      const btn = document.getElementById('btn-launch');
+      const textarea = document.getElementById('plan-toml-input');
+      const errEl = document.getElementById('plan-error');
+      const projectSelect = document.getElementById('plan-project');
+      const toml = textarea.value.trim();
+      if (!toml) { errEl.textContent = 'Plan TOML is empty'; return; }
+
+      btn.classList.add('loading');
+      btn.textContent = 'Launching\u2026';
+      errEl.textContent = '';
+
+      const body = { plan_toml: toml };
+      if (projectSelect && projectSelect.value && projectSelect.value !== '__new__') {
+        body.project_root = projectSelect.value;
+      }
+
+      try {
+        const res = await apiFetch('/api/orchestrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchestrationState = data.snapshot || data;
+          orchPrUrl = null;
+          orchDismissed = false;
+          renderOrchestration();
+        } else {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          errEl.textContent = body.error || body.message || 'Launch failed (' + res.status + ')';
+          btn.classList.remove('loading');
+          btn.textContent = 'Launch';
+        }
+      } catch (e) {
+        errEl.textContent = 'Network error: ' + e.message;
+        btn.classList.remove('loading');
+        btn.textContent = 'Launch';
+      }
+    }
+
+    async function orchAbort(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Aborting\u2026';
+      try {
+        await apiFetch('/api/orchestrate/abort', { method: 'POST' });
+      } catch (_) {}
+      btn.disabled = false;
+      btn.textContent = 'Abort';
+    }
+
+    async function orchMerge(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Merging\u2026';
+      try {
+        const res = await apiFetch('/api/orchestrate/merge', { method: 'POST' });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          alert('Merge failed: ' + (body.error || res.statusText));
+        }
+      } catch (e) {
+        alert('Merge error: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Merge';
+    }
+
+    async function orchPr(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Creating\u2026';
+      try {
+        const res = await apiFetch('/api/orchestrate/pr', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchPrUrl = data.pr_url || data.url || null;
+          renderOrchestration();
+        } else {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          alert('PR failed: ' + (body.error || res.statusText));
+        }
+      } catch (e) {
+        alert('PR error: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Create PR';
+    }
+
+    async function orchRelaunch(btn) {
+      // Relaunch the current active plan using its stored plan data
+      if (!orchestrationState) return;
+      await fetchPlanHistory();
+      const name = orchestrationState.plan_name;
+      const histEntry = planHistory.find(h => h.plan_name === name);
+      if (!histEntry) {
+        alert('Cannot relaunch: plan data not found in history. Try launching a new plan.');
+        return;
+      }
+      // Fetch full entry (list doesn't include plan/project_root)
+      await relaunchFromHistory(histEntry.id, btn);
+    }
+
+    async function relaunchFromHistory(id, btn) {
+      try {
+        const res = await apiFetch('/api/plans/history/' + encodeURIComponent(id));
+        if (!res.ok) { alert('Failed to load plan data'); return; }
+        const entry = await res.json();
+        await doRelaunch(entry, btn);
+      } catch (e) {
+        alert('Relaunch error: ' + e.message);
+      }
+    }
+
+    async function doRelaunch(entry, btn) {
+      if (!entry.plan) { alert('Cannot relaunch: original plan definition missing'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Relaunching\u2026';
+
+      // Serialize the plan back to TOML
+      const p = entry.plan;
+      let toml = '[plan]\nname = "' + p.plan.name + '"\n';
+      toml += 'branch = "' + (p.plan.branch || p.plan.name) + '"\n';
+      if (p.plan.model) toml += 'model = "' + p.plan.model + '"\n';
+      toml += 'on_complete = "' + (p.plan.on_complete || 'manual') + '"\n';
+      if (p.plan.skip_permissions) toml += 'skip_permissions = true\n';
+      for (const t of p.tasks) {
+        toml += '\n[[tasks]]\nname = "' + t.name + '"\n';
+        if (t.prompt.includes('\n')) {
+          toml += "prompt = '''\n" + t.prompt + "\n'''\n";
+        } else {
+          toml += 'prompt = "' + t.prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"\n';
+        }
+        if (t.model) toml += 'model = "' + t.model + '"\n';
+        if (t.depends_on && t.depends_on.length) toml += 'depends_on = [' + t.depends_on.map(d => '"' + d + '"').join(', ') + ']\n';
+        if (t.allowed_tools) toml += 'allowed_tools = "' + t.allowed_tools + '"\n';
+      }
+
+      const body = { plan_toml: toml };
+      if (entry.project_root) body.project_root = entry.project_root;
+
+      try {
+        const res = await apiFetch('/api/orchestrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchestrationState = data.snapshot || data;
+          orchPrUrl = null;
+          orchDismissed = false;
+          selectedHistoryId = null;
+          renderOrchestration(true);
+        } else {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          alert('Relaunch failed: ' + (rb.error || res.statusText));
+        }
+      } catch (e) {
+        alert('Relaunch error: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Relaunch';
+    }
+
+    let orchDismissed = false;
+
+    function orchReset() {
+      orchestrationState = null;
+      orchPrUrl = null;
+      orchDismissed = true;
+      expandedTasks.clear();
+      fetchPlanHistory();
+      renderOrchestration(true);
+    }
+
+    async function fetchProjects() {
+      try {
+        const res = await apiFetch('/api/projects');
+        if (res.ok) projects = await res.json();
+      } catch (_) {}
+    }
+
+    async function fetchPlanHistory() {
+      try {
+        const res = await apiFetch('/api/plans/history');
+        if (res.ok) planHistory = await res.json();
+      } catch (_) {}
+    }
+
+    async function fetchOrchStatus() {
+      if (orchDismissed) return;
+      try {
+        const res = await apiFetch('/api/orchestrate/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.plan_name) {
+            orchestrationState = data;
+            if (activeTab === 'plans') renderOrchestration();
+          }
+        }
+      } catch (_) {}
+    }
+
+    function startOrchPoll() {
+      if (orchPollTimer) return;
+      orchPollTimer = setInterval(fetchOrchStatus, 3000);
+    }
+
+    // ── Config toggles ──
+    function renderConfigToggles() {
+      const hBtn = document.getElementById('btn-auto-handoff');
+      const cBtn = document.getElementById('btn-auto-commit');
+      if (hBtn) {
+        hBtn.className = 'btn-toggle ' + (configAutoHandoff ? 'on' : 'off');
+        hBtn.textContent = configAutoHandoff ? 'auto ON' : 'auto OFF';
+      }
+      if (cBtn) {
+        cBtn.className = 'btn-toggle ' + (configAutoCommit ? 'on' : 'off');
+        cBtn.textContent = configAutoCommit ? 'git \u25CF' : 'git \u25CB';
+      }
+    }
+
+    async function toggleConfig(key) {
+      if (key === 'auto_handoff') configAutoHandoff = !configAutoHandoff;
+      if (key === 'auto_commit') configAutoCommit = !configAutoCommit;
+      renderConfigToggles();
+
+      const btn = key === 'auto_handoff'
+        ? document.getElementById('btn-auto-handoff')
+        : document.getElementById('btn-auto-commit');
+
+      try {
+        const newValue = key === 'auto_handoff' ? configAutoHandoff : configAutoCommit;
+        const res = await apiFetch('/api/config/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key, value: newValue })
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.value != null) {
+            if (key === 'auto_handoff') configAutoHandoff = data.value;
+            if (key === 'auto_commit') configAutoCommit = data.value;
+          }
+          renderConfigToggles();
+        }
+        if (btn) {
+          btn.classList.add('flash');
+          setTimeout(() => btn.classList.remove('flash'), 400);
+        }
+      } catch (_) {
+        if (key === 'auto_handoff') configAutoHandoff = !configAutoHandoff;
+        if (key === 'auto_commit') configAutoCommit = !configAutoCommit;
+        renderConfigToggles();
+      }
+    }
+
+    async function fetchConfig() {
+      try {
+        const res = await apiFetch('/api/config');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.auto_handoff != null) configAutoHandoff = data.auto_handoff;
+          if (data.auto_commit != null) configAutoCommit = data.auto_commit;
+          if (data.workspaces) configWorkspaces = data.workspaces;
+          renderConfigToggles();
+        }
+      } catch (_) {}
+    }
+
+    // ── Browser notifications ──
+    function checkNotifPermission() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        const banner = document.getElementById('notif-banner');
+        if (banner) banner.style.display = 'flex';
+      }
+    }
+
+    function requestNotifPermission() {
+      if (!('Notification' in window)) return;
+      Notification.requestPermission().then(() => {
+        const banner = document.getElementById('notif-banner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
+
+    function dismissNotifBanner() {
+      const banner = document.getElementById('notif-banner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    function notifyHandoff(msg) {
+      if (Notification.permission === 'granted') {
+        new Notification('relay \u2014 handoff saved', {
+          body: 'Handoff ' + (msg.id || '') + ' created',
+          icon: '/favicon.svg'
+        });
+      }
+    }
+
+    function notifyOrchStateChange(newState) {
+      if (Notification.permission !== 'granted') return;
+      if (newState === 'completed' || newState === 'failed') {
+        const s = orchestrationState;
+        const counts = s && s.counts ? s.counts : {};
+        const total = s && s.tasks ? s.tasks.length : 0;
+        new Notification('relay \u2014 plan ' + newState, {
+          body: (s ? s.plan_name : 'Plan') + ': ' + (counts.done || 0) + '/' + total + ' tasks done',
+          icon: '/favicon.svg'
+        });
+      }
+    }
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      switch (e.key) {
+        case '1': switchTab('sessions'); break;
+        case '2': switchTab('handoffs'); break;
+        case '3': switchTab('plans'); break;
+        case 'j':
+        case 'k': {
+          if (activeTab !== 'sessions' || !sessions.length) return;
+          const idx = sessions.findIndex(s => s.session_id === selectedId);
+          let next;
+          if (e.key === 'j') next = Math.min(sessions.length - 1, idx + 1);
+          else next = Math.max(0, idx - 1);
+          selectSession(sessions[next].session_id);
+          const cards = document.querySelectorAll('.session-card');
+          if (cards[next]) cards[next].scrollIntoView({ block: 'nearest' });
+          break;
+        }
+        case 'Enter': {
+          if (activeTab !== 'sessions') return;
+          const sel = getSelected();
+          if (sel) {
+            renderSessionDetail();
+            renderSessionMetrics();
+          }
+          break;
+        }
+      }
+    });
+
     // ── Init ──
-    (async () => {
+    async function initApp() {
+      try {
+        const res = await apiFetch('/api/config');
+        if (res.status === 401) {
+          _authToken = null;
+          localStorage.removeItem('relay_token');
+          document.getElementById('auth-error').textContent =
+            document.getElementById('auth-token').value ? 'Invalid token' : '';
+          showAuth();
+          return;
+        }
+        hideAuth();
+      } catch (_) {
+        // Server unreachable — proceed anyway, WS will retry
+        hideAuth();
+      }
       await fetchVersion();
-      await Promise.all([fetchSessions(), fetchHandoffs()]);
+      await Promise.allSettled([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects(), fetchPlanHistory()]);
       connectWs();
-    })();
+      startOrchPoll();
+      setInterval(fetchConfig, 5000); // poll config to sync TUI toggles
+      checkNotifPermission();
+      renderConfigToggles();
+    }
+
+    initApp();
   </script>
 </body>
 </html>

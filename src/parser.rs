@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::time::SystemTime;
 
@@ -79,18 +79,16 @@ pub struct ParsedSession {
     pub files_touched: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ConversationTurn {
     pub content: String,
-    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ToolUse {
     pub name: String,
     pub input_summary: String,
-    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 

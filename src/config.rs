@@ -36,6 +36,11 @@ pub struct Config {
     pub api_bind: String,
     /// API bearer token for authentication (default: none)
     pub api_token: Option<String>,
+    /// Workspace directories for project filtering in the plan wizard.
+    /// Only projects within these directories will appear in the dropdown.
+    /// If empty, all discovered projects are shown.
+    #[serde(default)]
+    pub workspaces: Vec<String>,
 }
 
 impl Default for Config {
@@ -56,6 +61,7 @@ impl Default for Config {
             api_port: 4747,
             api_bind: "127.0.0.1".to_string(),
             api_token: None,
+            workspaces: Vec::new(),
         }
     }
 }
@@ -103,6 +109,11 @@ sound = true
 # Slack webhook URL for handoff notifications (optional)
 # Create one at: https://api.slack.com/messaging/webhooks
 # slack_webhook = \"https://hooks.slack.com/services/...\"
+
+# Workspace directories for the plan wizard project selector
+# Only projects within these directories will appear in the dropdown
+# If empty, all discovered projects are shown
+# workspaces = [\"/Users/me/projects\", \"/Users/me/work\"]
 
 # API server
 # api_port = 4747
@@ -155,6 +166,38 @@ pub fn path() -> Result<PathBuf> {
         .context("No home directory")?
         .join(".relay")
         .join("config.toml"))
+}
+
+// ---------------------------------------------------------------------------
+// Shared runtime overrides (synced between TUI and API via file)
+// ---------------------------------------------------------------------------
+
+fn overrides_path() -> Result<PathBuf> {
+    Ok(dirs::home_dir()
+        .context("No home directory")?
+        .join(".relay")
+        .join("overrides.json"))
+}
+
+/// Load runtime overrides from the shared file. Returns empty map on any error.
+pub fn load_overrides() -> std::collections::HashMap<String, bool> {
+    let path = match overrides_path() {
+        Ok(p) => p,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => std::collections::HashMap::new(),
+    }
+}
+
+/// Persist runtime overrides to the shared file so the other process picks them up.
+pub fn save_overrides(overrides: &std::collections::HashMap<String, bool>) {
+    if let Ok(path) = overrides_path() {
+        if let Ok(json) = serde_json::to_string(overrides) {
+            let _ = std::fs::write(path, json);
+        }
+    }
 }
 
 pub fn load() -> Result<Config> {

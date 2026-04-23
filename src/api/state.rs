@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::config::Config;
+use crate::orchestrator::{OrchestrationSnapshot, Orchestrator, Plan};
 use crate::parser;
 use crate::session;
 use crate::statusline;
@@ -20,14 +23,23 @@ pub struct AppState {
 }
 
 pub struct AppStateInner {
-    pub sessions: Vec<SessionSnapshot>,
+    pub sessions: Vec<SessionSummary>,
     pub handoffs: Vec<HandoffEntry>,
     pub config: Config,
+    pub config_overrides: HashMap<String, bool>,
     pub last_refresh: Instant,
+    pub orchestrator: Option<OrchestrationHandle>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct SessionSnapshot {
+pub struct OrchestrationHandle {
+    pub orchestrator: Arc<std::sync::Mutex<Orchestrator>>,
+    pub join_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Lightweight session data for list views and WebSocket pushes.
+/// Excludes messages, tool_uses, context_history to keep payload small.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
     pub session_id: String,
     pub project_name: String,
     pub model: String,
@@ -38,6 +50,59 @@ pub struct SessionSnapshot {
     pub cost_usd: f64,
     pub age_secs: u64,
     pub files_touched: usize,
+    pub cwd: String,
+    pub version: String,
+    pub compaction_count: u32,
+    pub total_input_tokens: u64,
+    pub total_output_tokens: u64,
+    pub total_cache_read: u64,
+    pub total_cache_create: u64,
+    pub current_context_tokens: u64,
+    // From SessionStatus (statusline)
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    pub context_window_size: u64,
+    pub five_hour_used_pct: Option<f64>,
+    pub five_hour_resets_at: Option<u64>,
+    pub seven_day_used_pct: Option<f64>,
+    pub seven_day_resets_at: Option<u64>,
+    pub duration_ms: u64,
+    // Counts only (detail fetched on demand)
+    pub tool_use_count: usize,
+    pub user_message_count: usize,
+    pub assistant_message_count: usize,
+}
+
+/// Full session data including messages, tool_uses, context_history.
+/// Returned only by the single-session detail endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSnapshot {
+    #[serde(flatten)]
+    pub summary: SessionSummary,
+    pub tool_uses: Vec<ToolUseSnapshot>,
+    pub files_touched_paths: Vec<String>,
+    pub user_messages: Vec<MessageSnapshot>,
+    pub assistant_messages: Vec<MessageSnapshot>,
+    pub context_history: Vec<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUseSnapshot {
+    pub name: String,
+    pub input_summary: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageSnapshot {
+    pub content: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConfigToggleRequest {
+    pub key: String,
+    pub value: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,6 +118,7 @@ pub struct HandoffEntry {
 pub enum Event {
     SessionsUpdated,
     HandoffCreated { id: String },
+    OrchestrationUpdated,
     Error { message: String },
 }
 
@@ -68,28 +134,33 @@ impl AppState {
                 sessions: Vec::new(),
                 handoffs: Vec::new(),
                 config,
+                config_overrides: HashMap::new(),
                 last_refresh: Instant::now(),
+                orchestrator: None,
             })),
             event_tx,
         }
     }
 
     /// Refresh sessions and handoffs by calling sync code in spawn_blocking.
+    /// Only discovers sessions modified within the last 24 hours.
     pub async fn refresh(&self) {
+        const MAX_AGE_SECS: u64 = 86400; // 24 hours
+
         let result = tokio::task::spawn_blocking(
-            || -> anyhow::Result<(Vec<SessionSnapshot>, Vec<HandoffEntry>)> {
-                let sessions_info = session::discover_sessions().unwrap_or_default();
+            move || -> anyhow::Result<(Vec<SessionSummary>, Vec<HandoffEntry>)> {
+                let sessions_info =
+                    session::discover_sessions_since(MAX_AGE_SECS).unwrap_or_default();
                 let pmap = session::ProcessMap::discover();
                 let statuses = statusline::read_all();
 
-                let snapshots: Vec<SessionSnapshot> = sessions_info
+                let summaries: Vec<SessionSummary> = sessions_info
                     .iter()
                     .filter_map(|info| {
                         let parsed = parser::parse_session(info).ok()?;
                         let status = statuses.get(&info.session_id);
 
                         let context_pct = status.and_then(|s| s.context_used_pct).unwrap_or(0.0);
-
                         let cost_usd = status.map(|s| s.cost_usd).unwrap_or(0.0);
 
                         let process_dead = if parsed.age_secs < 300 {
@@ -109,7 +180,7 @@ impl AppState {
                         }
                         .to_string();
 
-                        Some(SessionSnapshot {
+                        Some(SessionSummary {
                             session_id: info.session_id.clone(),
                             project_name: info.project_name.clone(),
                             model: parsed.model.clone(),
@@ -120,13 +191,34 @@ impl AppState {
                             cost_usd,
                             age_secs: parsed.age_secs,
                             files_touched: parsed.files_touched.len(),
+                            cwd: parsed.cwd.clone(),
+                            version: parsed.version.clone(),
+                            compaction_count: parsed.compaction_count,
+                            total_input_tokens: parsed.total_input_tokens,
+                            total_output_tokens: parsed.total_output_tokens,
+                            total_cache_read: parsed.total_cache_read,
+                            total_cache_create: parsed.total_cache_create,
+                            current_context_tokens: parsed.current_context_tokens,
+                            lines_added: status.map(|s| s.lines_added).unwrap_or(0),
+                            lines_removed: status.map(|s| s.lines_removed).unwrap_or(0),
+                            context_window_size: status
+                                .and_then(|s| s.context_window_size)
+                                .unwrap_or(0),
+                            five_hour_used_pct: status.and_then(|s| s.five_hour_used_pct),
+                            five_hour_resets_at: status.and_then(|s| s.five_hour_resets_at),
+                            seven_day_used_pct: status.and_then(|s| s.seven_day_used_pct),
+                            seven_day_resets_at: status.and_then(|s| s.seven_day_resets_at),
+                            duration_ms: status.map(|s| s.duration_ms).unwrap_or(0),
+                            tool_use_count: parsed.tool_uses.len(),
+                            user_message_count: parsed.user_messages.len(),
+                            assistant_message_count: parsed.assistant_messages.len(),
                         })
                     })
                     .collect();
 
                 let handoffs = collect_handoffs().unwrap_or_default();
 
-                Ok((snapshots, handoffs))
+                Ok((summaries, handoffs))
             },
         )
         .await;
@@ -152,7 +244,7 @@ impl AppState {
         }
     }
 
-    pub async fn sessions(&self) -> Vec<SessionSnapshot> {
+    pub async fn sessions(&self) -> Vec<SessionSummary> {
         self.inner.read().await.sessions.clone()
     }
 
@@ -170,6 +262,146 @@ impl AppState {
 
     pub fn notify_handoff_created(&self, id: String) {
         let _ = self.event_tx.send(Event::HandoffCreated { id });
+    }
+
+    pub async fn set_config_override(&self, key: String, value: bool) {
+        // Load existing file overrides, merge our change, then save back
+        let mut overrides = crate::config::load_overrides();
+        overrides.insert(key.clone(), value);
+        crate::config::save_overrides(&overrides);
+        // Also keep in-memory copy (fallback if file I/O fails, e.g. in tests)
+        let mut inner = self.inner.write().await;
+        inner.config_overrides.insert(key, value);
+    }
+
+    pub async fn config_overrides(&self) -> HashMap<String, bool> {
+        // Merge: file values (picks up TUI changes) + in-memory (wins on conflict)
+        let mut merged = crate::config::load_overrides();
+        let inner = self.inner.read().await;
+        for (k, v) in &inner.config_overrides {
+            merged.insert(k.clone(), *v);
+        }
+        merged
+    }
+
+    /// Start an orchestration from a parsed Plan. Returns Err if one is already running.
+    pub async fn start_orchestration(
+        &self,
+        plan: Plan,
+        project_root: PathBuf,
+    ) -> Result<(), String> {
+        let mut inner = self.inner.write().await;
+
+        // Reject if an orchestration is already active
+        if let Some(handle) = &inner.orchestrator {
+            if !handle.join_handle.is_finished() {
+                return Err("an orchestration is already running".to_string());
+            }
+        }
+
+        let mut orchestrator = Orchestrator::new(plan, project_root);
+        orchestrator.setup().map_err(|e| e.to_string())?;
+
+        let orch = Arc::new(std::sync::Mutex::new(orchestrator));
+        let orch_tick = Arc::clone(&orch);
+        let event_tx = self.event_tx.clone();
+
+        let join_handle = tokio::spawn(async move {
+            loop {
+                let done = {
+                    let orch_ref = Arc::clone(&orch_tick);
+                    match tokio::task::spawn_blocking(move || {
+                        let mut o = orch_ref
+                            .lock()
+                            .map_err(|e| {
+                                eprintln!("[relay] orchestrator lock poisoned: {e}");
+                            })
+                            .ok()?;
+                        Some(o.tick())
+                    })
+                    .await
+                    {
+                        Ok(Some(done)) => done,
+                        Ok(None) => {
+                            // Lock poisoned — skip this tick, retry next
+                            eprintln!("[relay] orchestrator tick skipped (lock error)");
+                            false
+                        }
+                        Err(e) => {
+                            eprintln!("[relay] orchestrator tick panicked: {e}");
+                            true // stop the loop on panic
+                        }
+                    }
+                };
+
+                let _ = event_tx.send(Event::OrchestrationUpdated);
+
+                if done {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+
+            // Save history + cleanup worktree after loop ends
+            {
+                let orch_ref = Arc::clone(&orch_tick);
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Ok(o) = orch_ref.lock() {
+                        let snapshot = o.snapshot();
+                        if let Err(e) = crate::orchestrator::save_plan_history(
+                            &snapshot,
+                            &o.plan,
+                            &o.project_root,
+                        ) {
+                            eprintln!("[relay] failed to save plan history: {e}");
+                        }
+                        o.cleanup_worktree();
+                    }
+                })
+                .await;
+            }
+        });
+
+        inner.orchestrator = Some(OrchestrationHandle {
+            orchestrator: orch,
+            join_handle,
+        });
+
+        Ok(())
+    }
+
+    /// Get a snapshot of the current orchestration, if any.
+    pub async fn orchestration_snapshot(&self) -> Option<OrchestrationSnapshot> {
+        let inner = self.inner.read().await;
+        let handle = inner.orchestrator.as_ref()?;
+        let orch = handle.orchestrator.lock().ok()?;
+        Some(orch.snapshot())
+    }
+
+    /// Abort the running orchestration.
+    pub async fn abort_orchestration(&self) {
+        let inner = self.inner.read().await;
+        if let Some(handle) = &inner.orchestrator {
+            if let Ok(mut orch) = handle.orchestrator.lock() {
+                orch.abort();
+            }
+        }
+    }
+
+    /// Merge the orchestration branch.
+    pub async fn merge_orchestration(&self) -> Result<String, String> {
+        let inner = self.inner.read().await;
+        let handle = inner.orchestrator.as_ref().ok_or("no orchestration")?;
+        let orch = handle.orchestrator.lock().map_err(|e| e.to_string())?;
+        orch.merge_branch()
+    }
+
+    /// Create a PR for the orchestration branch.
+    pub async fn pr_orchestration(&self) -> Result<String, String> {
+        let inner = self.inner.read().await;
+        let handle = inner.orchestrator.as_ref().ok_or("no orchestration")?;
+        let orch = handle.orchestrator.lock().map_err(|e| e.to_string())?;
+        orch.create_pull_request()
     }
 }
 

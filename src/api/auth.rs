@@ -22,8 +22,6 @@ pub async fn auth_middleware(State(state): State<AppState>, req: Request, next: 
         return next.run(req).await;
     };
 
-    let is_ws = req.uri().path() == "/api/ws";
-
     // Check Authorization: Bearer <token> header
     if let Some(auth_header) = req.headers().get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
@@ -35,14 +33,12 @@ pub async fn auth_middleware(State(state): State<AppState>, req: Request, next: 
         }
     }
 
-    // WebSocket: browsers can't set custom headers, so also accept ?token=<value>
-    if is_ws {
-        if let Some(query) = req.uri().query() {
-            for part in query.split('&') {
-                if let Some(token_val) = part.strip_prefix("token=") {
-                    if constant_time_eq(token_val, &expected) {
-                        return next.run(req).await;
-                    }
+    // Also accept ?token=<value> in query string (needed for browser access)
+    if let Some(query) = req.uri().query() {
+        for part in query.split('&') {
+            if let Some(token_val) = part.strip_prefix("token=") {
+                if constant_time_eq(token_val, &expected) {
+                    return next.run(req).await;
                 }
             }
         }

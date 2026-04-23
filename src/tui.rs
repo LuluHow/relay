@@ -152,6 +152,15 @@ impl App {
             self.config = new_config;
         }
 
+        // Sync runtime overrides from shared file (GUI may have changed them)
+        let overrides = crate::config::load_overrides();
+        if let Some(&v) = overrides.get("auto_handoff") {
+            self.auto_handoff_override = Some(v);
+        }
+        if let Some(&v) = overrides.get("auto_commit") {
+            self.auto_commit_override = Some(v);
+        }
+
         // Single snapshot of all process data (ps + lsof/proc, once per tick)
         let pmap = session::ProcessMap::discover();
         self.pmap = pmap.clone();
@@ -848,6 +857,10 @@ fn handle_key(app: &mut App, key: event::KeyEvent) {
         KeyCode::Char('a') => {
             let new_val = !app.auto_handoff();
             app.auto_handoff_override = Some(new_val);
+            // Persist to shared file so GUI picks it up
+            let mut overrides = crate::config::load_overrides();
+            overrides.insert("auto_handoff".to_string(), new_val);
+            crate::config::save_overrides(&overrides);
             let state = if new_val { "ON" } else { "OFF" };
             app.status_msg = Some((
                 format!("auto-handoff {state} (runtime override)"),
@@ -857,6 +870,10 @@ fn handle_key(app: &mut App, key: event::KeyEvent) {
         KeyCode::Char('g') => {
             let new_val = !app.auto_commit();
             app.auto_commit_override = Some(new_val);
+            // Persist to shared file so GUI picks it up
+            let mut overrides = crate::config::load_overrides();
+            overrides.insert("auto_commit".to_string(), new_val);
+            crate::config::save_overrides(&overrides);
             let state = if new_val { "ON" } else { "OFF" };
             app.status_msg = Some((
                 format!("git auto-commit {state} (runtime override)"),
