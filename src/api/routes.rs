@@ -82,6 +82,27 @@ pub struct SessionsQuery {
     active: Option<bool>,
 }
 
+#[derive(Serialize)]
+pub struct ProjectResponse {
+    pub project_path: String,
+    pub project_name: String,
+    pub session_count: usize,
+}
+
+pub async fn list_projects() -> Json<Vec<ProjectResponse>> {
+    let projects = session::discover_projects().unwrap_or_default();
+    Json(
+        projects
+            .into_iter()
+            .map(|p| ProjectResponse {
+                project_path: p.project_path,
+                project_name: p.project_name,
+                session_count: p.session_count,
+            })
+            .collect(),
+    )
+}
+
 pub async fn list_sessions(
     State(state): State<AppState>,
     Query(params): Query<SessionsQuery>,
@@ -287,7 +308,18 @@ pub async fn start_orchestration(
         }
     } else if let Some(toml_str) = &req.plan_toml {
         match toml::from_str::<orchestrator::Plan>(toml_str) {
-            Ok(plan) => plan,
+            Ok(plan) => {
+                if let Err(e) = orchestrator::validate_plan(&plan) {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(DynErrorResponse {
+                            error: format!("invalid plan: {e}"),
+                        }),
+                    )
+                        .into_response();
+                }
+                plan
+            }
             Err(e) => {
                 return (
                     StatusCode::BAD_REQUEST,

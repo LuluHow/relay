@@ -458,6 +458,79 @@ pub fn has_active_subagents(jsonl_path: &Path, max_age_secs: u64) -> bool {
     false
 }
 
+// ── Project discovery ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct ProjectInfo {
+    pub project_path: String,
+    pub project_name: String,
+    pub session_count: usize,
+    pub last_modified: SystemTime,
+}
+
+/// Discover all Claude Code projects from ~/.claude/projects/.
+/// Returns a list of projects sorted by most recently active.
+pub fn discover_projects() -> Result<Vec<ProjectInfo>> {
+    let claude_dir = dirs::home_dir()
+        .context("No home directory")?
+        .join(".claude")
+        .join("projects");
+
+    if !claude_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut projects = Vec::new();
+
+    for project_entry in std::fs::read_dir(&claude_dir)? {
+        let project_entry = project_entry?;
+        let project_dir = project_entry.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+
+        let project_encoded = project_entry.file_name().to_string_lossy().to_string();
+        let (project_path, project_name) = decode_project_path(&project_encoded);
+
+        let mut session_count = 0usize;
+        let mut last_modified = SystemTime::UNIX_EPOCH;
+
+        for file_entry in std::fs::read_dir(&project_dir).into_iter().flatten() {
+            let file_entry = match file_entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let path = file_entry.path();
+            if path.extension().is_none_or(|e| e != "jsonl") {
+                continue;
+            }
+            if path.to_string_lossy().contains("subagents") {
+                continue;
+            }
+            session_count += 1;
+            if let Ok(meta) = file_entry.metadata() {
+                if let Ok(modified) = meta.modified() {
+                    if modified > last_modified {
+                        last_modified = modified;
+                    }
+                }
+            }
+        }
+
+        if session_count > 0 {
+            projects.push(ProjectInfo {
+                project_path,
+                project_name,
+                session_count,
+                last_modified,
+            });
+        }
+    }
+
+    projects.sort_by_key(|p| std::cmp::Reverse(p.last_modified));
+    Ok(projects)
+}
+
 // ── Session discovery ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]

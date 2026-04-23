@@ -157,7 +157,7 @@ pub fn load_plan(path: &Path) -> Result<Plan> {
     Ok(plan)
 }
 
-fn validate_plan(plan: &Plan) -> Result<()> {
+pub fn validate_plan(plan: &Plan) -> Result<()> {
     if plan.tasks.is_empty() {
         bail!("Plan has no tasks");
     }
@@ -645,6 +645,7 @@ impl Orchestrator {
             .arg("--output-format")
             .arg("text")
             .current_dir(&worktree_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 

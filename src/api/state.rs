@@ -315,12 +315,25 @@ impl AppState {
             loop {
                 let done = {
                     let orch_ref = Arc::clone(&orch_tick);
-                    tokio::task::spawn_blocking(move || {
-                        let mut o = orch_ref.lock().unwrap();
-                        o.tick()
+                    match tokio::task::spawn_blocking(move || {
+                        let mut o = orch_ref.lock().map_err(|e| {
+                            eprintln!("[relay] orchestrator lock poisoned: {e}");
+                        }).ok()?;
+                        Some(o.tick())
                     })
                     .await
-                    .unwrap_or(true)
+                    {
+                        Ok(Some(done)) => done,
+                        Ok(None) => {
+                            // Lock poisoned — skip this tick, retry next
+                            eprintln!("[relay] orchestrator tick skipped (lock error)");
+                            false
+                        }
+                        Err(e) => {
+                            eprintln!("[relay] orchestrator tick panicked: {e}");
+                            true // stop the loop on panic
+                        }
+                    }
                 };
 
                 let _ = event_tx.send(Event::OrchestrationUpdated);

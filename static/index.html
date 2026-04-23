@@ -530,14 +530,14 @@
     .plans-view {
       display: none;
       flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
+      flex: 1;
     }
 
     .plan-launch {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       flex: 1;
       padding: 32px;
       gap: 14px;
@@ -592,12 +592,179 @@
       pointer-events: none;
     }
 
+    .plan-launch select {
+      width: 100%;
+      max-width: 600px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .plan-launch select:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
     .plan-error {
       color: var(--red);
       font-size: 11px;
       max-width: 600px;
       width: 100%;
       text-align: center;
+    }
+
+    /* ── Wizard / TOML mode tabs ── */
+    .plan-mode-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+    .plan-mode-btn {
+      padding: 3px 14px;
+      font-size: 11px;
+      font-family: var(--font);
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .plan-mode-btn:hover { color: var(--text); }
+    .plan-mode-btn.active { background: var(--sel-bg); color: var(--green); }
+    .plan-mode-btn + .plan-mode-btn { border-left: 1px solid var(--border); }
+
+    /* ── Wizard form ── */
+    .wizard-form {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .wizard-form .field-row {
+      display: flex;
+      gap: 10px;
+    }
+    .wizard-form .field-row > .field-group { flex: 1; }
+    .wizard-form .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .wizard-form .field-group label {
+      font-size: 10px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0;
+      align-self: flex-start;
+    }
+    .wizard-form input,
+    .wizard-form select,
+    .wizard-form textarea {
+      width: 100%;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+    .wizard-form input:focus,
+    .wizard-form select:focus,
+    .wizard-form textarea:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+    .wizard-form textarea {
+      min-height: 60px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .wizard-section-title {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+      margin-top: 6px;
+    }
+
+    /* ── Task cards in wizard ── */
+    .wizard-task {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+    }
+    .wizard-task .task-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wizard-task .task-num {
+      font-size: 10px;
+      color: var(--muted);
+      min-width: 14px;
+    }
+    .wizard-task .task-head input {
+      flex: 1;
+    }
+    .btn-remove-task {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .btn-remove-task:hover { color: var(--red); }
+
+    .btn-add-task {
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--dim);
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .btn-add-task:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .wizard-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wizard-toggle-row input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--green);
+    }
+    .wizard-toggle-row label {
+      font-size: 11px !important;
+      text-transform: none !important;
+      color: var(--text) !important;
+      letter-spacing: 0 !important;
     }
 
     /* Plan monitoring */
@@ -1020,6 +1187,10 @@
     let orchPollTimer = null;
     const expandedTasks = new Set();
     let orchPrUrl = null;
+    let projects = [];
+    let planMode = 'wizard'; // 'wizard' or 'toml'
+    let wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
+    let wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: false, project: '' };
     let configAutoHandoff = false;
     let configAutoCommit = false;
     let serverUptime = null;
@@ -1529,7 +1700,7 @@
       document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
       document.getElementById('plans-view').style.display = tab === 'plans' ? 'flex' : 'none';
       if (tab === 'handoffs') renderHandoffs();
-      if (tab === 'plans') renderOrchestration();
+      if (tab === 'plans') renderOrchestration(true);
     }
 
     async function toggleHandoff(id) {
@@ -1626,11 +1797,13 @@
           case 'handoff_created':
             notifyHandoff(msg);
             await fetchHandoffs();
-            if (activeTab === 'handoffs') renderHandoffs();
             break;
           case 'orchestration_updated': {
+            if (orchDismissed) break;
+            const snap = msg.orchestration || msg.snapshot || msg;
+            if (!snap || !snap.plan_name) break;
             const prevState = orchestrationState ? orchestrationState.state : null;
-            orchestrationState = msg.snapshot || msg;
+            orchestrationState = snap;
             if (orchestrationState.state !== prevState) {
               notifyOrchStateChange(orchestrationState.state);
             }
@@ -1659,6 +1832,7 @@
     async function fetchHandoffs() {
       const res = await fetch('/api/handoffs');
       handoffs = await res.json();
+      updateFooter();
       if (activeTab === 'handoffs') renderHandoffs();
     }
 
@@ -1691,22 +1865,239 @@
       }
     }
 
-    function renderOrchestration() {
+    let orchViewMode = null; // 'monitor' or 'launch'
+
+    function renderOrchestration(force) {
       const view = document.getElementById('plans-view');
-      if (orchestrationState && orchestrationState.plan_name) {
+      const shouldMonitor = !!(orchestrationState && orchestrationState.plan_name);
+      const nextMode = shouldMonitor ? 'monitor' : 'launch';
+
+      // Don't rebuild the launch/wizard form if already showing it
+      if (!force && nextMode === 'launch' && orchViewMode === 'launch') return;
+
+      orchViewMode = nextMode;
+      if (shouldMonitor) {
         renderOrchMonitor(view);
       } else {
         renderOrchLaunch(view);
       }
     }
 
+    function projectOptions(selected) {
+      let opts = '<option value=""' + (!selected ? ' selected' : '') + '>server cwd (default)</option>';
+      for (const p of projects) {
+        const sel = selected === p.project_path ? ' selected' : '';
+        opts += '<option value="' + esc(p.project_path) + '"' + sel + '>'
+          + esc(p.project_name) + ' \u2014 ' + esc(p.project_path)
+          + ' (' + p.session_count + ')</option>';
+      }
+      return opts;
+    }
+
     function renderOrchLaunch(view) {
-      view.innerHTML = '<div class="plan-launch">'
-        + '<label>Plan TOML</label>'
-        + '<textarea id="plan-toml-input" placeholder="[plan]\nname = &quot;my-plan&quot;\nbranch = &quot;feat/my-plan&quot;\n\n[[task]]\nname = &quot;task-1&quot;\nprompt = &quot;...&quot;"></textarea>'
-        + '<button class="btn-launch" id="btn-launch" onclick="launchPlan()">Launch</button>'
-        + '<div class="plan-error" id="plan-error"></div>'
+      const modeW = planMode === 'wizard' ? ' active' : '';
+      const modeT = planMode === 'toml' ? ' active' : '';
+
+      let html = '<div class="plan-launch">'
+        + '<div class="plan-mode-tabs">'
+        + '<button class="plan-mode-btn' + modeW + '" onclick="setPlanMode(\'wizard\')">Wizard</button>'
+        + '<button class="plan-mode-btn' + modeT + '" onclick="setPlanMode(\'toml\')">TOML</button>'
         + '</div>';
+
+      if (planMode === 'toml') {
+        html += '<label>Project</label>'
+          + '<select id="plan-project">' + projectOptions() + '</select>'
+          + '<label>Plan TOML</label>'
+          + '<textarea id="plan-toml-input" placeholder="[plan]\nname = &quot;my-plan&quot;\nbranch = &quot;feat/my-plan&quot;\n\n[[tasks]]\nname = &quot;task-1&quot;\nprompt = &quot;...&quot;"></textarea>'
+          + '<button class="btn-launch" id="btn-launch" onclick="launchPlan()">Launch</button>'
+          + '<div class="plan-error" id="plan-error"></div>';
+      } else {
+        html += renderWizardForm();
+      }
+
+      html += '</div>';
+      view.innerHTML = html;
+    }
+
+    function setPlanMode(mode) {
+      // Save wizard state before switching
+      if (planMode === 'wizard') saveWizardState();
+      planMode = mode;
+      renderOrchestration(true);
+    }
+
+    function saveWizardState() {
+      // Save plan meta
+      const wzName = document.getElementById('wz-name');
+      if (wzName) {
+        wizardPlan.name = wzName.value;
+        wizardPlan.branch = (document.getElementById('wz-branch') || {}).value || '';
+        wizardPlan.model = (document.getElementById('wz-model') || {}).value || '';
+        wizardPlan.on_complete = (document.getElementById('wz-oncomplete') || {}).value || 'manual';
+        wizardPlan.skip_permissions = (document.getElementById('wz-skip-perms') || {}).checked || false;
+        wizardPlan.project = (document.getElementById('plan-project') || {}).value || '';
+      }
+      // Save tasks
+      const tasks = [];
+      let i = 0;
+      while (true) {
+        const nameEl = document.getElementById('wt-name-' + i);
+        if (!nameEl) break;
+        tasks.push({
+          name: nameEl.value,
+          prompt: (document.getElementById('wt-prompt-' + i) || {}).value || '',
+          model: (document.getElementById('wt-model-' + i) || {}).value || '',
+          depends_on: (document.getElementById('wt-deps-' + i) || {}).value || '',
+          allowed_tools: (document.getElementById('wt-tools-' + i) || {}).value || '',
+        });
+        i++;
+      }
+      if (tasks.length) wizardTasks = tasks;
+    }
+
+    function renderWizardForm() {
+      let html = '<div class="wizard-form">';
+
+      // Plan meta
+      const wp = wizardPlan;
+      const ocSel = function(v) { return v === wp.on_complete ? ' selected' : ''; };
+      html += '<div class="wizard-section-title">Plan</div>'
+        + '<div class="field-row">'
+        + '<div class="field-group"><label>Name</label><input id="wz-name" placeholder="my-plan" value="' + esc(wp.name) + '"></div>'
+        + '<div class="field-group"><label>Branch</label><input id="wz-branch" placeholder="defaults to name" value="' + esc(wp.branch) + '"></div>'
+        + '</div>'
+        + '<div class="field-row">'
+        + '<div class="field-group"><label>Model</label><input id="wz-model" placeholder="e.g. claude-sonnet-4-6" value="' + esc(wp.model) + '"></div>'
+        + '<div class="field-group"><label>On complete</label>'
+        + '<select id="wz-oncomplete"><option value="manual"' + ocSel('manual') + '>manual</option><option value="merge"' + ocSel('merge') + '>merge</option><option value="pr"' + ocSel('pr') + '>pr</option></select></div>'
+        + '</div>'
+        + '<div class="field-group"><label>Project</label><select id="plan-project">' + projectOptions(wp.project) + '</select></div>'
+        + '<div class="wizard-toggle-row">'
+        + '<input type="checkbox" id="wz-skip-perms"' + (wp.skip_permissions ? ' checked' : '') + '><label for="wz-skip-perms">Skip permission checks</label>'
+        + '</div>';
+
+      // Tasks
+      html += '<div class="wizard-section-title">Tasks</div>';
+      for (let i = 0; i < wizardTasks.length; i++) {
+        const t = wizardTasks[i];
+        html += '<div class="wizard-task">'
+          + '<div class="task-head">'
+          + '<span class="task-num">#' + (i + 1) + '</span>'
+          + '<input id="wt-name-' + i + '" placeholder="task-name" value="' + esc(t.name) + '">'
+          + (wizardTasks.length > 1 ? '<button class="btn-remove-task" onclick="removeWizardTask(' + i + ')" title="Remove">\u00d7</button>' : '')
+          + '</div>'
+          + '<div class="field-group"><label>Prompt</label>'
+          + '<textarea id="wt-prompt-' + i + '" placeholder="What should Claude do?">' + esc(t.prompt) + '</textarea></div>'
+          + '<div class="field-row">'
+          + '<div class="field-group"><label>Model</label><input id="wt-model-' + i + '" placeholder="inherit plan model" value="' + esc(t.model) + '"></div>'
+          + '<div class="field-group"><label>Depends on</label><input id="wt-deps-' + i + '" placeholder="task-1, task-2" value="' + esc(t.depends_on) + '"></div>'
+          + '</div>'
+          + '<div class="field-group"><label>Allowed tools</label><input id="wt-tools-' + i + '" placeholder="e.g. Read,Grep,Edit" value="' + esc(t.allowed_tools) + '"></div>'
+          + '</div>';
+      }
+      html += '<button class="btn-add-task" onclick="addWizardTask()">+ Add task</button>';
+
+      // Launch
+      html += '<button class="btn-launch" id="btn-launch" onclick="launchWizard()">Launch</button>'
+        + '<div class="plan-error" id="plan-error"></div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    function addWizardTask() {
+      saveWizardState();
+      wizardTasks.push({ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' });
+      renderOrchestration(true);
+    }
+
+    function removeWizardTask(idx) {
+      saveWizardState();
+      wizardTasks.splice(idx, 1);
+      renderOrchestration(true);
+    }
+
+    function wizardToToml() {
+      const name = (document.getElementById('wz-name') || {}).value || '';
+      const branch = (document.getElementById('wz-branch') || {}).value || '';
+      const model = (document.getElementById('wz-model') || {}).value || '';
+      const onComplete = (document.getElementById('wz-oncomplete') || {}).value || 'manual';
+      const skipPerms = (document.getElementById('wz-skip-perms') || {}).checked || false;
+
+      if (!name.trim()) return { error: 'Plan name is required' };
+
+      saveWizardState();
+      const tasks = wizardTasks.filter(t => t.name.trim());
+      if (!tasks.length) return { error: 'At least one task is required' };
+      for (const t of tasks) {
+        if (!t.prompt.trim()) return { error: 'Task "' + t.name + '" needs a prompt' };
+      }
+
+      let toml = '[plan]\n';
+      toml += 'name = "' + name.trim() + '"\n';
+      toml += 'branch = "' + (branch.trim() || name.trim()) + '"\n';
+      if (model.trim()) toml += 'model = "' + model.trim() + '"\n';
+      toml += 'on_complete = "' + onComplete + '"\n';
+      if (skipPerms) toml += 'skip_permissions = true\n';
+
+      for (const t of tasks) {
+        toml += '\n[[tasks]]\n';
+        toml += 'name = "' + t.name.trim() + '"\n';
+        if (t.prompt.includes('\n')) {
+          toml += "prompt = '''\n" + t.prompt + "\n'''\n";
+        } else {
+          toml += 'prompt = "' + t.prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"\n';
+        }
+        if (t.model.trim()) toml += 'model = "' + t.model.trim() + '"\n';
+        const deps = t.depends_on.split(',').map(d => d.trim()).filter(Boolean);
+        if (deps.length) toml += 'depends_on = [' + deps.map(d => '"' + d + '"').join(', ') + ']\n';
+        if (t.allowed_tools.trim()) toml += 'allowed_tools = "' + t.allowed_tools.trim() + '"\n';
+      }
+
+      return { toml };
+    }
+
+    async function launchWizard() {
+      const errEl = document.getElementById('plan-error');
+      const btn = document.getElementById('btn-launch');
+      const result = wizardToToml();
+      if (result.error) { errEl.textContent = result.error; return; }
+
+      const projectSelect = document.getElementById('plan-project');
+      btn.classList.add('loading');
+      btn.textContent = 'Launching\u2026';
+      errEl.textContent = '';
+
+      const body = { plan_toml: result.toml };
+      if (projectSelect && projectSelect.value) {
+        body.project_root = projectSelect.value;
+      }
+
+      try {
+        const res = await fetch('/api/orchestrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchestrationState = data.snapshot || data;
+          orchPrUrl = null;
+          orchDismissed = false;
+          wizardTasks = [{ name: '', prompt: '', model: '', depends_on: '', allowed_tools: '' }];
+          wizardPlan = { name: '', branch: '', model: '', on_complete: 'manual', skip_permissions: false, project: '' };
+          renderOrchestration();
+        } else {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          errEl.textContent = rb.error || rb.message || 'Launch failed (' + res.status + ')';
+          btn.classList.remove('loading');
+          btn.textContent = 'Launch';
+        }
+      } catch (e) {
+        errEl.textContent = 'Network error: ' + e.message;
+        btn.classList.remove('loading');
+        btn.textContent = 'Launch';
+      }
     }
 
     function renderOrchMonitor(view) {
@@ -1796,13 +2187,14 @@
     function toggleTask(name) {
       if (expandedTasks.has(name)) expandedTasks.delete(name);
       else expandedTasks.add(name);
-      renderOrchestration();
+      renderOrchestration(true);
     }
 
     async function launchPlan() {
       const btn = document.getElementById('btn-launch');
       const textarea = document.getElementById('plan-toml-input');
       const errEl = document.getElementById('plan-error');
+      const projectSelect = document.getElementById('plan-project');
       const toml = textarea.value.trim();
       if (!toml) { errEl.textContent = 'Plan TOML is empty'; return; }
 
@@ -1810,16 +2202,22 @@
       btn.textContent = 'Launching\u2026';
       errEl.textContent = '';
 
+      const body = { plan_toml: toml };
+      if (projectSelect && projectSelect.value) {
+        body.project_root = projectSelect.value;
+      }
+
       try {
         const res = await fetch('/api/orchestrate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan_toml: toml })
+          body: JSON.stringify(body)
         });
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
           orchestrationState = data.snapshot || data;
           orchPrUrl = null;
+          orchDismissed = false;
           renderOrchestration();
         } else {
           const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -1880,14 +2278,25 @@
       btn.textContent = 'Create PR';
     }
 
+    let orchDismissed = false;
+
     function orchReset() {
       orchestrationState = null;
       orchPrUrl = null;
+      orchDismissed = true;
       expandedTasks.clear();
-      renderOrchestration();
+      renderOrchestration(true);
+    }
+
+    async function fetchProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        if (res.ok) projects = await res.json();
+      } catch (_) {}
     }
 
     async function fetchOrchStatus() {
+      if (orchDismissed) return;
       try {
         const res = await fetch('/api/orchestrate/status');
         if (res.ok) {
@@ -2042,7 +2451,7 @@
     // ── Init ──
     (async () => {
       await fetchVersion();
-      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig()]);
+      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig(), fetchProjects()]);
       connectWs();
       startOrchPoll();
       checkNotifPermission();

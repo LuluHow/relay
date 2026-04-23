@@ -64,6 +64,7 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/sessions/{id}/handoff", post(routes::create_handoff))
         .route("/api/handoffs", get(routes::list_handoffs))
         .route("/api/handoffs/{id}", get(routes::get_handoff))
+        .route("/api/projects", get(routes::list_projects))
         .route("/api/config", get(routes::get_config))
         .route("/api/config/toggle", post(routes::toggle_config))
         .route("/api/orchestrate", post(routes::start_orchestration))
