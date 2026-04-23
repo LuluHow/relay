@@ -9,7 +9,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::state::{AppState, ConfigToggleRequest, HandoffEntry, SessionSnapshot};
+use crate::api::state::{
+    AppState, ConfigToggleRequest, HandoffEntry, MessageSnapshot, SessionSnapshot, SessionSummary,
+    ToolUseSnapshot,
+};
 use crate::orchestrator;
 use crate::{handoff, parser, session, storage};
 
@@ -143,7 +146,7 @@ pub async fn list_projects(State(state): State<AppState>) -> Json<Vec<ProjectRes
 pub async fn list_sessions(
     State(state): State<AppState>,
     Query(params): Query<SessionsQuery>,
-) -> Json<Vec<SessionSnapshot>> {
+) -> Json<Vec<SessionSummary>> {
     let mut sessions = state.sessions().await;
     if params.active == Some(true) {
         sessions.retain(|s| matches!(s.state.as_str(), "starting" | "working" | "waiting"));
@@ -152,16 +155,72 @@ pub async fn list_sessions(
 }
 
 pub async fn get_session(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    // Check that the session exists in our cached summaries
     let sessions = state.sessions().await;
-    match sessions.into_iter().find(|s| s.session_id == id) {
-        Some(s) => Json(s).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "session not found",
-            }),
-        )
-            .into_response(),
+    let summary = match sessions.into_iter().find(|s| s.session_id == id) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "session not found",
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Parse the full session JSONL on demand for detail view
+    let id_clone = id.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let sessions_info = session::discover_sessions_since(86400).unwrap_or_default();
+        let info = sessions_info.into_iter().find(|s| s.session_id == id_clone)?;
+        parser::parse_session(&info).ok()
+    })
+    .await;
+
+    match result {
+        Ok(Some(parsed)) => {
+            let tool_uses = parsed
+                .tool_uses
+                .iter()
+                .map(|t| ToolUseSnapshot {
+                    name: t.name.clone(),
+                    input_summary: t.input_summary.clone(),
+                    timestamp: t.timestamp.clone(),
+                })
+                .collect();
+            let user_messages = parsed
+                .user_messages
+                .iter()
+                .map(|m| MessageSnapshot {
+                    content: m.content.clone(),
+                    timestamp: m.timestamp.clone(),
+                })
+                .collect();
+            let assistant_messages = parsed
+                .assistant_messages
+                .iter()
+                .map(|m| MessageSnapshot {
+                    content: m.content.clone(),
+                    timestamp: m.timestamp.clone(),
+                })
+                .collect();
+
+            let snapshot = SessionSnapshot {
+                summary,
+                tool_uses,
+                files_touched_paths: parsed.files_touched,
+                user_messages,
+                assistant_messages,
+                context_history: parsed.context_history,
+            };
+            Json(snapshot).into_response()
+        }
+        _ => {
+            // Fall back to returning the summary if parsing fails
+            Json(summary).into_response()
+        }
     }
 }
 
@@ -485,7 +544,7 @@ pub async fn list_plan_history() -> Json<Vec<PlanHistoryResponse>> {
 
 pub async fn get_plan_history(Path(id): Path<String>) -> Response {
     match orchestrator::get_plan_history(&id) {
-        Ok(Some(entry)) => Json(entry.snapshot).into_response(),
+        Ok(Some(entry)) => Json(entry).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {

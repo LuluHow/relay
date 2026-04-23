@@ -57,8 +57,8 @@ fn mime_for_path(path: &str) -> &'static str {
 
 /// Build the app router from an existing AppState (used by both `serve` and tests).
 pub fn build_app(app_state: AppState) -> Router {
-    Router::new()
-        .route("/api/health", get(routes::health))
+    // Protected API routes (require auth token when configured)
+    let api_routes = Router::new()
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions/{id}", get(routes::get_session))
         .route("/api/sessions/{id}/handoff", post(routes::create_handoff))
@@ -75,11 +75,16 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/plans/history", get(routes::list_plan_history))
         .route("/api/plans/history/{id}", get(routes::get_plan_history))
         .route("/api/ws", get(ws::handler))
-        .fallback(static_handler)
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             auth::auth_middleware,
-        ))
+        ));
+
+    // Public routes (no auth: static files, health check)
+    Router::new()
+        .route("/api/health", get(routes::health))
+        .merge(api_routes)
+        .fallback(static_handler)
         .layer(CorsLayer::permissive())
         .with_state(app_state)
 }

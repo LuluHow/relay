@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 const MAX_OUTPUT_LINES: usize = 5000;
 const VALID_ON_COMPLETE: &[&str] = &["manual", "merge", "pr"];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Plan {
     pub plan: PlanMeta,
     #[serde(rename = "tasks")]
@@ -1198,6 +1198,12 @@ pub struct PlanHistoryEntry {
     pub elapsed_secs: u64,
     pub completed_at: String,
     pub snapshot: OrchestrationSnapshot,
+    /// Original plan definition (for relaunch).
+    #[serde(default)]
+    pub plan: Option<Plan>,
+    /// Project root used for this plan (for relaunch).
+    #[serde(default)]
+    pub project_root: Option<String>,
 }
 
 fn plans_dir() -> Result<PathBuf> {
@@ -1209,7 +1215,11 @@ fn plans_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
-pub fn save_plan_history(snapshot: &OrchestrationSnapshot) -> Result<String> {
+pub fn save_plan_history(
+    snapshot: &OrchestrationSnapshot,
+    plan: &Plan,
+    project_root: &Path,
+) -> Result<String> {
     let dir = plans_dir()?;
     let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
     let id = format!("{ts}_{}", snapshot.plan_name);
@@ -1224,6 +1234,8 @@ pub fn save_plan_history(snapshot: &OrchestrationSnapshot) -> Result<String> {
         elapsed_secs: snapshot.elapsed_secs,
         completed_at: chrono::Utc::now().to_rfc3339(),
         snapshot: snapshot.clone(),
+        plan: Some(plan.clone()),
+        project_root: Some(project_root.to_string_lossy().to_string()),
     };
     let json = serde_json::to_string_pretty(&entry)?;
     let path = dir.join(format!("{id}.json"));
@@ -1478,10 +1490,25 @@ model = "sonnet"
     }
 
     #[test]
-    fn test_skip_permissions_default_false() {
+    fn test_skip_permissions_default_true() {
         let toml = r#"
 [plan]
 name = "test"
+
+[[tasks]]
+name = "a"
+prompt = "A"
+"#;
+        let plan: Plan = toml::from_str(toml).unwrap();
+        assert!(plan.plan.skip_permissions);
+    }
+
+    #[test]
+    fn test_skip_permissions_explicit_false() {
+        let toml = r#"
+[plan]
+name = "test"
+skip_permissions = false
 
 [[tasks]]
 name = "a"

@@ -7,7 +7,7 @@ use http_body_util::BodyExt;
 use relay::{
     api::{
         build_app,
-        state::{AppState, MessageSnapshot, SessionSnapshot, ToolUseSnapshot},
+        state::{AppState, MessageSnapshot, SessionSnapshot, SessionSummary, ToolUseSnapshot},
     },
     config::Config,
 };
@@ -180,7 +180,7 @@ async fn test_auth_required() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/health")
+                .uri("/api/sessions")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -198,7 +198,7 @@ async fn test_auth_valid_token() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/health")
+                .uri("/api/sessions")
                 .header("Authorization", "Bearer secret")
                 .body(Body::empty())
                 .unwrap(),
@@ -215,7 +215,7 @@ async fn test_auth_invalid_token() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/health")
+                .uri("/api/sessions")
                 .header("Authorization", "Bearer wrong-token")
                 .body(Body::empty())
                 .unwrap(),
@@ -842,18 +842,37 @@ async fn test_sessions_enriched_fields_present() {
 #[tokio::test]
 async fn test_api_session_snapshot_serialization() {
     let snapshot = SessionSnapshot {
-        session_id: "test-id".into(),
-        project_name: "my-project".into(),
-        model: "opus".into(),
-        git_branch: "main".into(),
-        state: "active".into(),
-        turn_count: 5,
-        context_pct: 42.0,
-        cost_usd: 1.23,
-        age_secs: 300,
-        files_touched: 3,
-        cwd: "/tmp/project".into(),
-        version: "1.0.0".into(),
+        summary: SessionSummary {
+            session_id: "test-id".into(),
+            project_name: "my-project".into(),
+            model: "opus".into(),
+            git_branch: "main".into(),
+            state: "active".into(),
+            turn_count: 5,
+            context_pct: 42.0,
+            cost_usd: 1.23,
+            age_secs: 300,
+            files_touched: 3,
+            cwd: "/tmp/project".into(),
+            version: "1.0.0".into(),
+            compaction_count: 1,
+            total_input_tokens: 5000,
+            total_output_tokens: 3000,
+            total_cache_read: 100,
+            total_cache_create: 50,
+            current_context_tokens: 4000,
+            lines_added: 42,
+            lines_removed: 10,
+            context_window_size: 200000,
+            five_hour_used_pct: Some(25.0),
+            five_hour_resets_at: Some(1800),
+            seven_day_used_pct: None,
+            seven_day_resets_at: None,
+            duration_ms: 60000,
+            tool_use_count: 1,
+            user_message_count: 1,
+            assistant_message_count: 1,
+        },
         tool_uses: vec![ToolUseSnapshot {
             name: "Read".into(),
             input_summary: "file.rs".into(),
@@ -869,20 +888,6 @@ async fn test_api_session_snapshot_serialization() {
             timestamp: None,
         }],
         context_history: vec![1000, 2000],
-        compaction_count: 1,
-        total_input_tokens: 5000,
-        total_output_tokens: 3000,
-        total_cache_read: 100,
-        total_cache_create: 50,
-        current_context_tokens: 4000,
-        lines_added: 42,
-        lines_removed: 10,
-        context_window_size: 200000,
-        five_hour_used_pct: Some(25.0),
-        five_hour_resets_at: Some(1800),
-        seven_day_used_pct: None,
-        seven_day_resets_at: None,
-        duration_ms: 60000,
     };
 
     let json = serde_json::to_value(&snapshot).expect("snapshot should serialize to JSON");
@@ -920,6 +925,9 @@ async fn test_api_session_snapshot_serialization() {
         "seven_day_used_pct",
         "seven_day_resets_at",
         "duration_ms",
+        "tool_use_count",
+        "user_message_count",
+        "assistant_message_count",
     ];
 
     let obj = json.as_object().expect("should be a JSON object");
@@ -1382,18 +1390,37 @@ async fn test_full_api_smoke() {
 #[tokio::test]
 async fn test_enriched_snapshot_round_trip() {
     let original = SessionSnapshot {
-        session_id: "rt-001".into(),
-        project_name: "round-trip-project".into(),
-        model: "claude-sonnet-4-20250514".into(),
-        git_branch: "feat/round-trip".into(),
-        state: "working".into(),
-        turn_count: 12,
-        context_pct: 67.5,
-        cost_usd: 2.45,
-        age_secs: 900,
-        files_touched: 5,
-        cwd: "/home/user/project".into(),
-        version: "0.3.0".into(),
+        summary: SessionSummary {
+            session_id: "rt-001".into(),
+            project_name: "round-trip-project".into(),
+            model: "claude-sonnet-4-20250514".into(),
+            git_branch: "feat/round-trip".into(),
+            state: "working".into(),
+            turn_count: 12,
+            context_pct: 67.5,
+            cost_usd: 2.45,
+            age_secs: 900,
+            files_touched: 5,
+            cwd: "/home/user/project".into(),
+            version: "0.3.0".into(),
+            compaction_count: 2,
+            total_input_tokens: 50000,
+            total_output_tokens: 30000,
+            total_cache_read: 1200,
+            total_cache_create: 800,
+            current_context_tokens: 45000,
+            lines_added: 120,
+            lines_removed: 35,
+            context_window_size: 200000,
+            five_hour_used_pct: Some(33.3),
+            five_hour_resets_at: Some(3600),
+            seven_day_used_pct: Some(12.5),
+            seven_day_resets_at: Some(86400),
+            duration_ms: 900000,
+            tool_use_count: 2,
+            user_message_count: 1,
+            assistant_message_count: 1,
+        },
         tool_uses: vec![
             ToolUseSnapshot {
                 name: "Edit".into(),
@@ -1424,20 +1451,6 @@ async fn test_enriched_snapshot_round_trip() {
             },
         ],
         context_history: vec![1000, 2500, 5000, 8000],
-        compaction_count: 2,
-        total_input_tokens: 50000,
-        total_output_tokens: 30000,
-        total_cache_read: 1200,
-        total_cache_create: 800,
-        current_context_tokens: 45000,
-        lines_added: 120,
-        lines_removed: 35,
-        context_window_size: 200000,
-        five_hour_used_pct: Some(33.3),
-        five_hour_resets_at: Some(3600),
-        seven_day_used_pct: Some(12.5),
-        seven_day_resets_at: Some(86400),
-        duration_ms: 900000,
     };
 
     // Serialize to JSON string
@@ -1447,18 +1460,18 @@ async fn test_enriched_snapshot_round_trip() {
     let restored: SessionSnapshot =
         serde_json::from_str(&json_str).expect("deserialize should succeed");
 
-    // Verify key fields survived the round trip
-    assert_eq!(restored.session_id, "rt-001");
-    assert_eq!(restored.project_name, "round-trip-project");
-    assert_eq!(restored.model, "claude-sonnet-4-20250514");
-    assert_eq!(restored.git_branch, "feat/round-trip");
-    assert_eq!(restored.state, "working");
-    assert_eq!(restored.turn_count, 12);
-    assert!((restored.context_pct - 67.5).abs() < 0.01);
-    assert!((restored.cost_usd - 2.45).abs() < 0.01);
-    assert_eq!(restored.age_secs, 900);
-    assert_eq!(restored.files_touched, 5);
-    assert_eq!(restored.cwd, "/home/user/project");
+    // Verify key fields survived the round trip (flattened summary fields)
+    assert_eq!(restored.summary.session_id, "rt-001");
+    assert_eq!(restored.summary.project_name, "round-trip-project");
+    assert_eq!(restored.summary.model, "claude-sonnet-4-20250514");
+    assert_eq!(restored.summary.git_branch, "feat/round-trip");
+    assert_eq!(restored.summary.state, "working");
+    assert_eq!(restored.summary.turn_count, 12);
+    assert!((restored.summary.context_pct - 67.5).abs() < 0.01);
+    assert!((restored.summary.cost_usd - 2.45).abs() < 0.01);
+    assert_eq!(restored.summary.age_secs, 900);
+    assert_eq!(restored.summary.files_touched, 5);
+    assert_eq!(restored.summary.cwd, "/home/user/project");
     assert_eq!(restored.tool_uses.len(), 2);
     assert_eq!(restored.tool_uses[0].name, "Edit");
     assert_eq!(restored.tool_uses[1].name, "Bash");
@@ -1467,13 +1480,13 @@ async fn test_enriched_snapshot_round_trip() {
     assert_eq!(restored.user_messages[0].content, "Fix the bug in parser");
     assert_eq!(restored.assistant_messages.len(), 1);
     assert_eq!(restored.context_history, vec![1000, 2500, 5000, 8000]);
-    assert_eq!(restored.compaction_count, 2);
-    assert_eq!(restored.total_input_tokens, 50000);
-    assert_eq!(restored.total_output_tokens, 30000);
-    assert_eq!(restored.lines_added, 120);
-    assert_eq!(restored.lines_removed, 35);
-    assert_eq!(restored.context_window_size, 200000);
-    assert_eq!(restored.five_hour_used_pct, Some(33.3));
-    assert_eq!(restored.seven_day_used_pct, Some(12.5));
-    assert_eq!(restored.duration_ms, 900000);
+    assert_eq!(restored.summary.compaction_count, 2);
+    assert_eq!(restored.summary.total_input_tokens, 50000);
+    assert_eq!(restored.summary.total_output_tokens, 30000);
+    assert_eq!(restored.summary.lines_added, 120);
+    assert_eq!(restored.summary.lines_removed, 35);
+    assert_eq!(restored.summary.context_window_size, 200000);
+    assert_eq!(restored.summary.five_hour_used_pct, Some(33.3));
+    assert_eq!(restored.summary.seven_day_used_pct, Some(12.5));
+    assert_eq!(restored.summary.duration_ms, 900000);
 }

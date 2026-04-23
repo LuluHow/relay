@@ -543,8 +543,10 @@ pub struct SessionInfo {
     pub modified: SystemTime,
 }
 
-/// Discover all Claude Code sessions from ~/.claude/projects/
-pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
+/// Discover Claude Code sessions from ~/.claude/projects/,
+/// limited to those modified within `max_age_secs` (default: 24 hours).
+/// Pass 0 to return all sessions regardless of age.
+pub fn discover_sessions_since(max_age_secs: u64) -> Result<Vec<SessionInfo>> {
     let claude_dir = dirs::home_dir()
         .context("No home directory")?
         .join(".claude")
@@ -587,6 +589,17 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
 
             let modified = file_entry.metadata()?.modified()?;
 
+            // Skip old sessions when max_age_secs is set
+            if max_age_secs > 0 {
+                let age = SystemTime::now()
+                    .duration_since(modified)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                if age > max_age_secs {
+                    continue;
+                }
+            }
+
             sessions.push(SessionInfo {
                 session_id,
                 project_path: project_path.clone(),
@@ -600,6 +613,11 @@ pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
     // Sort by most recently modified first
     sessions.sort_by_key(|b| std::cmp::Reverse(b.modified));
     Ok(sessions)
+}
+
+/// Discover all Claude Code sessions (no age filter). Used by CLI commands.
+pub fn discover_sessions() -> Result<Vec<SessionInfo>> {
+    discover_sessions_since(0)
 }
 
 /// Discover running Claude processes that don't have a matching active session yet.

@@ -168,6 +168,38 @@ pub fn path() -> Result<PathBuf> {
         .join("config.toml"))
 }
 
+// ---------------------------------------------------------------------------
+// Shared runtime overrides (synced between TUI and API via file)
+// ---------------------------------------------------------------------------
+
+fn overrides_path() -> Result<PathBuf> {
+    Ok(dirs::home_dir()
+        .context("No home directory")?
+        .join(".relay")
+        .join("overrides.json"))
+}
+
+/// Load runtime overrides from the shared file. Returns empty map on any error.
+pub fn load_overrides() -> std::collections::HashMap<String, bool> {
+    let path = match overrides_path() {
+        Ok(p) => p,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => std::collections::HashMap::new(),
+    }
+}
+
+/// Persist runtime overrides to the shared file so the other process picks them up.
+pub fn save_overrides(overrides: &std::collections::HashMap<String, bool>) {
+    if let Ok(path) = overrides_path() {
+        if let Ok(json) = serde_json::to_string(overrides) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+}
+
 pub fn load() -> Result<Config> {
     let p = path()?;
     if !p.exists() {

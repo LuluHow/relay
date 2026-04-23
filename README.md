@@ -1,5 +1,7 @@
 # relay
 
+![relay TUI](relay.png)
+
 CLI daemon that monitors [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and generates structured handoffs to preserve context across session boundaries.
 
 When Claude Code approaches its context limit, relay saves the session state as a markdown handoff, optionally kills the session, and restarts it with the handoff injected — so you never lose your thread.
@@ -7,6 +9,7 @@ When Claude Code approaches its context limit, relay saves the session state as 
 ## Features
 
 - **Real-time TUI** — monitor all active Claude Code sessions (context %, tokens, model, cost)
+- **Web dashboard** — browser-based GUI with the same capabilities, accessible remotely
 - **Auto-handoff** — detects context saturation, saves state, kills & restarts with continuity
 - **Structured handoffs** — goal, current focus, last assistant state, recent tools, files touched
 - **Git auto-commit** — commits work before handoff so nothing is lost
@@ -62,6 +65,7 @@ relay init
 
 ```bash
 relay                                  # Launch TUI (default)
+relay serve                            # Start web dashboard + API server
 relay status                           # Show active sessions
 relay save                             # Save handoff for most recent session
 relay list                             # List saved handoffs
@@ -70,11 +74,16 @@ relay orchestrate plan.toml            # Run multi-task orchestration
 relay orchestrate --create-plan        # Create a plan interactively
 relay init                             # Create config + shell wrapper
 relay test-notify                      # Test Discord/Slack webhook notifications
+relay tunnel                           # Print instructions for remote access
 relay uninstall                        # Remove all traces of relay
 relay --version                        # Show version
 ```
 
-### TUI keybindings
+## TUI
+
+The default interface. Launch with `relay` (no arguments).
+
+### Keybindings
 
 | Key | Action |
 |-----|--------|
@@ -88,6 +97,70 @@ relay --version                        # Show version
 | `r` | Refresh |
 | `1/2` | Jump to Sessions/Handoffs tab |
 | `q` | Quit |
+
+## Web dashboard
+
+> **Experimental** — The web dashboard is still under active development. Expect rough edges and occasional bugs. Feedback and bug reports are very welcome — open an issue on [GitHub](https://github.com/LuluHow/relay/issues).
+
+The web dashboard provides the same monitoring and control capabilities as the TUI, accessible from any browser. It includes real-time session monitoring, handoff management, config toggles (auto-handoff, auto-commit), and orchestration controls. Works on desktop and mobile.
+
+<p align="center">
+  <img src="relay-mobile.jpg" alt="relay web dashboard on mobile" width="300" />
+</p>
+
+Toggle states are synced between TUI and web dashboard — changing auto-handoff in one is reflected in the other.
+
+### Starting the server
+
+```bash
+# Start on default port (4747), localhost only
+relay serve
+
+# Custom port and bind address
+relay serve --port 8080 --bind 0.0.0.0
+
+# With authentication (recommended for remote access)
+relay serve --token my-secret-token
+```
+
+Then open `http://localhost:4747` in your browser.
+
+### Configuration
+
+Server settings can also be set in `~/.relay/config.toml`:
+
+```toml
+api_port = 4747
+api_bind = "127.0.0.1"
+api_token = "your-secret-token"
+```
+
+### Remote access with Tailscale
+
+[Tailscale](https://tailscale.com) is the easiest way to access relay from another device (phone, laptop, tablet) without exposing it to the public internet.
+
+1. Install Tailscale on both your server machine and your client device
+2. Bind relay to your Tailscale interface:
+   ```bash
+   relay serve --bind 0.0.0.0 --token my-secret-token
+   ```
+3. Find your machine's Tailscale IP:
+   ```bash
+   tailscale ip -4
+   # e.g. 100.64.1.42
+   ```
+4. Open `http://100.64.1.42:4747` from any device on your Tailnet
+
+When connecting remotely, the dashboard prompts for your API token automatically.
+
+### Remote access with Cloudflare Tunnel
+
+For public access without opening ports:
+
+```bash
+relay tunnel                           # Print setup instructions
+cloudflared tunnel --url http://127.0.0.1:4747
+```
 
 ## Configuration
 
@@ -129,6 +202,11 @@ sound = true
 
 # Slack webhook URL for handoff notifications (optional)
 # slack_webhook = "https://hooks.slack.com/services/..."
+
+# Web dashboard / API settings
+# api_port = 4747
+# api_bind = "127.0.0.1"
+# api_token = "your-secret-token"
 ```
 
 ### Webhook notifications (Discord / Slack)
@@ -243,22 +321,6 @@ Relay ships a Claude Code skill (`SKILL.md`) that helps decompose complex tasks 
 
 To use it, reference the skill in your Claude Code configuration or invoke it with `/relay-orchestrate`.
 
-## Platform support
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| macOS (Apple Silicon) | Fully supported | Primary development platform |
-| macOS (Intel) | Fully supported | |
-| Linux (x86_64) | Supported | Uses `/proc` for process detection |
-| WSL | Supported | Detected automatically |
-| Windows (native) | Not supported | Use WSL |
-
-### Linux notes
-
-- **Notifications** require D-Bus. Build without them: `cargo build --release --no-default-features`
-- **Python 3** is required for hooks (Stop, statusLine)
-- Process detection uses `/proc` instead of `lsof`
-
 ## How it works
 
 ```
@@ -283,11 +345,28 @@ To use it, reference the skill in your Claude Code configuration or invoke it wi
    - Kills the Claude process
 5. The shell wrapper detects `next_prompt` and restarts Claude with the handoff
 
+## Platform support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS (Apple Silicon) | Fully supported | Primary development platform |
+| macOS (Intel) | Fully supported | |
+| Linux (x86_64) | Supported | Uses `/proc` for process detection |
+| WSL | Supported | Detected automatically |
+| Windows (native) | Not supported | Use WSL |
+
+### Linux notes
+
+- **Notifications** require D-Bus. Build without them: `cargo build --release --no-default-features`
+- **Python 3** is required for hooks (Stop, statusLine)
+- Process detection uses `/proc` instead of `lsof`
+
 ## File structure
 
 ```
 ~/.relay/
 ├── config.toml              # Configuration
+├── overrides.json           # Runtime toggle overrides (synced between TUI and web)
 ├── claude-wrapper.sh        # Shell wrapper (sourced in .zshrc/.bashrc)
 ├── statusline-hook.sh       # statusLine hook script
 ├── hooks/

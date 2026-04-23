@@ -23,7 +23,7 @@ pub struct AppState {
 }
 
 pub struct AppStateInner {
-    pub sessions: Vec<SessionSnapshot>,
+    pub sessions: Vec<SessionSummary>,
     pub handoffs: Vec<HandoffEntry>,
     pub config: Config,
     pub config_overrides: HashMap<String, bool>,
@@ -36,8 +36,10 @@ pub struct OrchestrationHandle {
     pub join_handle: tokio::task::JoinHandle<()>,
 }
 
+/// Lightweight session data for list views and WebSocket pushes.
+/// Excludes messages, tool_uses, context_history to keep payload small.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionSnapshot {
+pub struct SessionSummary {
     pub session_id: String,
     pub project_name: String,
     pub model: String,
@@ -48,14 +50,8 @@ pub struct SessionSnapshot {
     pub cost_usd: f64,
     pub age_secs: u64,
     pub files_touched: usize,
-    // From ParsedSession
     pub cwd: String,
     pub version: String,
-    pub tool_uses: Vec<ToolUseSnapshot>,
-    pub files_touched_paths: Vec<String>,
-    pub user_messages: Vec<MessageSnapshot>,
-    pub assistant_messages: Vec<MessageSnapshot>,
-    pub context_history: Vec<u64>,
     pub compaction_count: u32,
     pub total_input_tokens: u64,
     pub total_output_tokens: u64,
@@ -71,6 +67,23 @@ pub struct SessionSnapshot {
     pub seven_day_used_pct: Option<f64>,
     pub seven_day_resets_at: Option<u64>,
     pub duration_ms: u64,
+    // Counts only (detail fetched on demand)
+    pub tool_use_count: usize,
+    pub user_message_count: usize,
+    pub assistant_message_count: usize,
+}
+
+/// Full session data including messages, tool_uses, context_history.
+/// Returned only by the single-session detail endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSnapshot {
+    #[serde(flatten)]
+    pub summary: SessionSummary,
+    pub tool_uses: Vec<ToolUseSnapshot>,
+    pub files_touched_paths: Vec<String>,
+    pub user_messages: Vec<MessageSnapshot>,
+    pub assistant_messages: Vec<MessageSnapshot>,
+    pub context_history: Vec<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,21 +143,24 @@ impl AppState {
     }
 
     /// Refresh sessions and handoffs by calling sync code in spawn_blocking.
+    /// Only discovers sessions modified within the last 24 hours.
     pub async fn refresh(&self) {
+        const MAX_AGE_SECS: u64 = 86400; // 24 hours
+
         let result = tokio::task::spawn_blocking(
-            || -> anyhow::Result<(Vec<SessionSnapshot>, Vec<HandoffEntry>)> {
-                let sessions_info = session::discover_sessions().unwrap_or_default();
+            move || -> anyhow::Result<(Vec<SessionSummary>, Vec<HandoffEntry>)> {
+                let sessions_info =
+                    session::discover_sessions_since(MAX_AGE_SECS).unwrap_or_default();
                 let pmap = session::ProcessMap::discover();
                 let statuses = statusline::read_all();
 
-                let snapshots: Vec<SessionSnapshot> = sessions_info
+                let summaries: Vec<SessionSummary> = sessions_info
                     .iter()
                     .filter_map(|info| {
                         let parsed = parser::parse_session(info).ok()?;
                         let status = statuses.get(&info.session_id);
 
                         let context_pct = status.and_then(|s| s.context_used_pct).unwrap_or(0.0);
-
                         let cost_usd = status.map(|s| s.cost_usd).unwrap_or(0.0);
 
                         let process_dead = if parsed.age_secs < 300 {
@@ -164,35 +180,7 @@ impl AppState {
                         }
                         .to_string();
 
-                        let tool_uses = parsed
-                            .tool_uses
-                            .iter()
-                            .map(|t| ToolUseSnapshot {
-                                name: t.name.clone(),
-                                input_summary: t.input_summary.clone(),
-                                timestamp: t.timestamp.clone(),
-                            })
-                            .collect();
-
-                        let user_messages = parsed
-                            .user_messages
-                            .iter()
-                            .map(|m| MessageSnapshot {
-                                content: m.content.clone(),
-                                timestamp: m.timestamp.clone(),
-                            })
-                            .collect();
-
-                        let assistant_messages = parsed
-                            .assistant_messages
-                            .iter()
-                            .map(|m| MessageSnapshot {
-                                content: m.content.clone(),
-                                timestamp: m.timestamp.clone(),
-                            })
-                            .collect();
-
-                        Some(SessionSnapshot {
+                        Some(SessionSummary {
                             session_id: info.session_id.clone(),
                             project_name: info.project_name.clone(),
                             model: parsed.model.clone(),
@@ -203,21 +191,14 @@ impl AppState {
                             cost_usd,
                             age_secs: parsed.age_secs,
                             files_touched: parsed.files_touched.len(),
-                            // From ParsedSession
                             cwd: parsed.cwd.clone(),
                             version: parsed.version.clone(),
-                            tool_uses,
-                            files_touched_paths: parsed.files_touched.clone(),
-                            user_messages,
-                            assistant_messages,
-                            context_history: parsed.context_history.clone(),
                             compaction_count: parsed.compaction_count,
                             total_input_tokens: parsed.total_input_tokens,
                             total_output_tokens: parsed.total_output_tokens,
                             total_cache_read: parsed.total_cache_read,
                             total_cache_create: parsed.total_cache_create,
                             current_context_tokens: parsed.current_context_tokens,
-                            // From SessionStatus (statusline)
                             lines_added: status.map(|s| s.lines_added).unwrap_or(0),
                             lines_removed: status.map(|s| s.lines_removed).unwrap_or(0),
                             context_window_size: status
@@ -228,13 +209,16 @@ impl AppState {
                             seven_day_used_pct: status.and_then(|s| s.seven_day_used_pct),
                             seven_day_resets_at: status.and_then(|s| s.seven_day_resets_at),
                             duration_ms: status.map(|s| s.duration_ms).unwrap_or(0),
+                            tool_use_count: parsed.tool_uses.len(),
+                            user_message_count: parsed.user_messages.len(),
+                            assistant_message_count: parsed.assistant_messages.len(),
                         })
                     })
                     .collect();
 
                 let handoffs = collect_handoffs().unwrap_or_default();
 
-                Ok((snapshots, handoffs))
+                Ok((summaries, handoffs))
             },
         )
         .await;
@@ -260,7 +244,7 @@ impl AppState {
         }
     }
 
-    pub async fn sessions(&self) -> Vec<SessionSnapshot> {
+    pub async fn sessions(&self) -> Vec<SessionSummary> {
         self.inner.read().await.sessions.clone()
     }
 
@@ -281,12 +265,23 @@ impl AppState {
     }
 
     pub async fn set_config_override(&self, key: String, value: bool) {
+        // Load existing file overrides, merge our change, then save back
+        let mut overrides = crate::config::load_overrides();
+        overrides.insert(key.clone(), value);
+        crate::config::save_overrides(&overrides);
+        // Also keep in-memory copy (fallback if file I/O fails, e.g. in tests)
         let mut inner = self.inner.write().await;
         inner.config_overrides.insert(key, value);
     }
 
     pub async fn config_overrides(&self) -> HashMap<String, bool> {
-        self.inner.read().await.config_overrides.clone()
+        // Merge: file values (picks up TUI changes) + in-memory (wins on conflict)
+        let mut merged = crate::config::load_overrides();
+        let inner = self.inner.read().await;
+        for (k, v) in &inner.config_overrides {
+            merged.insert(k.clone(), *v);
+        }
+        merged
     }
 
     /// Start an orchestration from a parsed Plan. Returns Err if one is already running.
@@ -350,7 +345,11 @@ impl AppState {
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Ok(o) = orch_ref.lock() {
                         let snapshot = o.snapshot();
-                        if let Err(e) = crate::orchestrator::save_plan_history(&snapshot) {
+                        if let Err(e) = crate::orchestrator::save_plan_history(
+                            &snapshot,
+                            &o.plan,
+                            &o.project_root,
+                        ) {
                             eprintln!("[relay] failed to save plan history: {e}");
                         }
                         o.cleanup_worktree();

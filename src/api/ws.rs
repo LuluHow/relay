@@ -6,18 +6,18 @@ use axum::{
 use serde::Serialize;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::api::state::{AppState, Event, HandoffEntry, SessionSnapshot};
+use crate::api::state::{AppState, Event, HandoffEntry, SessionSummary};
 use crate::orchestrator::OrchestrationSnapshot;
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WsMessage {
     Snapshot {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
         handoffs: Vec<HandoffEntry>,
     },
     SessionsUpdated {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
     },
     HandoffCreated {
         id: String,
@@ -29,7 +29,7 @@ enum WsMessage {
         message: String,
     },
     Resync {
-        sessions: Vec<SessionSnapshot>,
+        sessions: Vec<SessionSummary>,
         handoffs: Vec<HandoffEntry>,
     },
 }
