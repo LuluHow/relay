@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ── Plan definition ────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ pub struct Plan {
     pub tasks: Vec<TaskDef>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlanMeta {
     pub name: String,
     #[serde(default)]
@@ -43,7 +43,7 @@ fn default_branch() -> String {
     "orchestrate".to_string()
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TaskDef {
     pub name: String,
     pub prompt: String,
@@ -57,7 +57,7 @@ pub struct TaskDef {
 
 // ── Runtime state ──────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum TaskStatus {
     Pending,
     Blocked,
@@ -96,6 +96,35 @@ pub struct TaskState {
     pub exit_code: Option<i32>,
     pub started_at: Option<Instant>,
     pub finished_at: Option<Instant>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskSnapshot {
+    pub name: String,
+    pub status: String,
+    pub depends_on: Vec<String>,
+    pub output_tail: Vec<String>,
+    pub exit_code: Option<i32>,
+    pub elapsed_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrchestrationSnapshot {
+    pub plan_name: String,
+    pub branch: String,
+    pub state: String,
+    pub tasks: Vec<TaskSnapshot>,
+    pub elapsed_secs: u64,
+    pub counts: OrchestrationCounts,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrchestrationCounts {
+    pub pending: usize,
+    pub blocked: usize,
+    pub running: usize,
+    pub done: usize,
+    pub failed: usize,
 }
 
 pub struct Orchestrator {
@@ -368,6 +397,61 @@ impl Orchestrator {
     /// Elapsed time since orchestration started.
     pub fn elapsed(&self) -> std::time::Duration {
         self.started_at.elapsed()
+    }
+
+    /// Build a serializable snapshot of the current orchestration state.
+    pub fn snapshot(&self) -> OrchestrationSnapshot {
+        let (pending, blocked, running, done, failed) = self.counts();
+
+        let all_terminal = self
+            .tasks
+            .iter()
+            .all(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Failed));
+
+        let state = if !all_terminal {
+            "running"
+        } else if failed > 0 {
+            "failed"
+        } else {
+            "completed"
+        }
+        .to_string();
+
+        let tasks = self
+            .tasks
+            .iter()
+            .map(|t| {
+                let tail_start = t.output_lines.len().saturating_sub(50);
+                TaskSnapshot {
+                    name: t.def.name.clone(),
+                    status: t.status.label().to_string(),
+                    depends_on: t.def.depends_on.clone(),
+                    output_tail: t.output_lines[tail_start..].to_vec(),
+                    exit_code: t.exit_code,
+                    elapsed_secs: t.started_at.map(|s| {
+                        t.finished_at
+                            .unwrap_or_else(Instant::now)
+                            .duration_since(s)
+                            .as_secs()
+                    }),
+                }
+            })
+            .collect();
+
+        OrchestrationSnapshot {
+            plan_name: self.plan.plan.name.clone(),
+            branch: self.branch_name.clone(),
+            state,
+            tasks,
+            elapsed_secs: self.elapsed().as_secs(),
+            counts: OrchestrationCounts {
+                pending,
+                blocked,
+                running,
+                done,
+                failed,
+            },
+        }
     }
 
     /// Kill all running tasks and clean up.

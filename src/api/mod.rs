@@ -66,6 +66,11 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/handoffs/{id}", get(routes::get_handoff))
         .route("/api/config", get(routes::get_config))
         .route("/api/config/toggle", post(routes::toggle_config))
+        .route("/api/orchestrate", post(routes::start_orchestration))
+        .route("/api/orchestrate/status", get(routes::orchestration_status))
+        .route("/api/orchestrate/abort", post(routes::abort_orchestration))
+        .route("/api/orchestrate/merge", post(routes::merge_orchestration))
+        .route("/api/orchestrate/pr", post(routes::create_orchestration_pr))
         .route("/api/ws", get(ws::handler))
         .fallback(static_handler)
         .layer(middleware::from_fn_with_state(

@@ -10,6 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::api::state::{AppState, ConfigToggleRequest, HandoffEntry, SessionSnapshot};
+use crate::orchestrator;
 use crate::{handoff, parser, session, storage};
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
@@ -252,4 +253,127 @@ pub async fn toggle_config(
         "message": "override applied"
     }))
     .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct StartOrchestrationRequest {
+    pub plan_path: Option<String>,
+    pub plan_toml: Option<String>,
+    pub project_root: Option<String>,
+}
+
+pub async fn start_orchestration(
+    State(state): State<AppState>,
+    Json(req): Json<StartOrchestrationRequest>,
+) -> Response {
+    // Parse plan from path or inline TOML
+    let plan = if let Some(path) = &req.plan_path {
+        let p = std::path::PathBuf::from(path);
+        match orchestrator::load_plan(&p) {
+            Ok(plan) => plan,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(DynErrorResponse {
+                        error: format!("failed to load plan: {e}"),
+                    }),
+                )
+                    .into_response()
+            }
+        }
+    } else if let Some(toml_str) = &req.plan_toml {
+        match toml::from_str::<orchestrator::Plan>(toml_str) {
+            Ok(plan) => plan,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(DynErrorResponse {
+                        error: format!("invalid plan TOML: {e}"),
+                    }),
+                )
+                    .into_response()
+            }
+        }
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "provide plan_path or plan_toml",
+            }),
+        )
+            .into_response();
+    };
+
+    let project_root = req
+        .project_root
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+
+    let plan_name = plan.plan.name.clone();
+
+    match state.start_orchestration(plan, project_root).await {
+        Ok(()) => Json(serde_json::json!({
+            "status": "started",
+            "plan_name": plan_name,
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::CONFLICT,
+            Json(DynErrorResponse { error: e }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn orchestration_status(State(state): State<AppState>) -> Response {
+    match state.orchestration_snapshot().await {
+        Some(snapshot) => Json(snapshot).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "no orchestration running",
+            }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn abort_orchestration(State(state): State<AppState>) -> Response {
+    if state.orchestration_snapshot().await.is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "no orchestration running",
+            }),
+        )
+            .into_response();
+    }
+    state.abort_orchestration().await;
+    Json(serde_json::json!({ "status": "aborted" })).into_response()
+}
+
+pub async fn merge_orchestration(State(state): State<AppState>) -> Response {
+    match state.merge_orchestration().await {
+        Ok(msg) => Json(serde_json::json!({ "status": msg })).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(DynErrorResponse { error: e }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn create_orchestration_pr(State(state): State<AppState>) -> Response {
+    match state.pr_orchestration().await {
+        Ok(url) => Json(serde_json::json!({ "status": "created", "url": url })).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(DynErrorResponse { error: e }),
+        )
+            .into_response(),
+    }
 }

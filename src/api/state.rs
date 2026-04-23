@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -6,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::config::Config;
+use crate::orchestrator::{Orchestrator, OrchestrationSnapshot, Plan};
 use crate::parser;
 use crate::session;
 use crate::statusline;
@@ -26,6 +28,12 @@ pub struct AppStateInner {
     pub config: Config,
     pub config_overrides: HashMap<String, bool>,
     pub last_refresh: Instant,
+    pub orchestrator: Option<OrchestrationHandle>,
+}
+
+pub struct OrchestrationHandle {
+    pub orchestrator: Arc<std::sync::Mutex<Orchestrator>>,
+    pub join_handle: tokio::task::JoinHandle<()>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -97,6 +105,7 @@ pub struct HandoffEntry {
 pub enum Event {
     SessionsUpdated,
     HandoffCreated { id: String },
+    OrchestrationUpdated,
     Error { message: String },
 }
 
@@ -114,6 +123,7 @@ impl AppState {
                 config,
                 config_overrides: HashMap::new(),
                 last_refresh: Instant::now(),
+                orchestrator: None,
             })),
             event_tx,
         }
@@ -277,6 +287,103 @@ impl AppState {
 
     pub async fn config_overrides(&self) -> HashMap<String, bool> {
         self.inner.read().await.config_overrides.clone()
+    }
+
+    /// Start an orchestration from a parsed Plan. Returns Err if one is already running.
+    pub async fn start_orchestration(
+        &self,
+        plan: Plan,
+        project_root: PathBuf,
+    ) -> Result<(), String> {
+        let mut inner = self.inner.write().await;
+
+        // Reject if an orchestration is already active
+        if let Some(handle) = &inner.orchestrator {
+            if !handle.join_handle.is_finished() {
+                return Err("an orchestration is already running".to_string());
+            }
+        }
+
+        let mut orchestrator = Orchestrator::new(plan, project_root);
+        orchestrator.setup().map_err(|e| e.to_string())?;
+
+        let orch = Arc::new(std::sync::Mutex::new(orchestrator));
+        let orch_tick = Arc::clone(&orch);
+        let event_tx = self.event_tx.clone();
+
+        let join_handle = tokio::spawn(async move {
+            loop {
+                let done = {
+                    let orch_ref = Arc::clone(&orch_tick);
+                    tokio::task::spawn_blocking(move || {
+                        let mut o = orch_ref.lock().unwrap();
+                        o.tick()
+                    })
+                    .await
+                    .unwrap_or(true)
+                };
+
+                let _ = event_tx.send(Event::OrchestrationUpdated);
+
+                if done {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        });
+
+        inner.orchestrator = Some(OrchestrationHandle {
+            orchestrator: orch,
+            join_handle,
+        });
+
+        Ok(())
+    }
+
+    /// Get a snapshot of the current orchestration, if any.
+    pub async fn orchestration_snapshot(&self) -> Option<OrchestrationSnapshot> {
+        let inner = self.inner.read().await;
+        let handle = inner.orchestrator.as_ref()?;
+        let orch = handle.orchestrator.lock().ok()?;
+        Some(orch.snapshot())
+    }
+
+    /// Abort the running orchestration.
+    pub async fn abort_orchestration(&self) {
+        let inner = self.inner.read().await;
+        if let Some(handle) = &inner.orchestrator {
+            if let Ok(mut orch) = handle.orchestrator.lock() {
+                orch.abort();
+            }
+        }
+    }
+
+    /// Merge the orchestration branch.
+    pub async fn merge_orchestration(&self) -> Result<String, String> {
+        let inner = self.inner.read().await;
+        let handle = inner
+            .orchestrator
+            .as_ref()
+            .ok_or("no orchestration")?;
+        let orch = handle
+            .orchestrator
+            .lock()
+            .map_err(|e| e.to_string())?;
+        orch.merge_branch()
+    }
+
+    /// Create a PR for the orchestration branch.
+    pub async fn pr_orchestration(&self) -> Result<String, String> {
+        let inner = self.inner.read().await;
+        let handle = inner
+            .orchestrator
+            .as_ref()
+            .ok_or("no orchestration")?;
+        let orch = handle
+            .orchestrator
+            .lock()
+            .map_err(|e| e.to_string())?;
+        orch.create_pull_request()
     }
 }
 
