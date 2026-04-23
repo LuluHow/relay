@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>relay</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Aldrich&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -22,7 +25,8 @@
       --violet:     #b39cd1;
       --border:     #242424;
       --sel-bg:     #16221a;
-      --font:       ui-monospace, "SF Mono", "Cascadia Code", monospace;
+      --font:       "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+      --font-title: "Aldrich", sans-serif;
     }
 
     html, body {
@@ -55,6 +59,7 @@
     }
 
     .logo {
+      font-family: var(--font-title);
       font-size: 15px;
       font-weight: bold;
       color: var(--green);
@@ -192,6 +197,7 @@
     .col:last-child { border-right: none; }
 
     .col-title {
+      font-family: var(--font-title);
       padding: 6px 12px;
       font-size: 10px;
       font-weight: bold;
@@ -346,6 +352,7 @@
 
     /* Tool timeline */
     .tl-title {
+      font-family: var(--font-title);
       padding: 6px 14px;
       font-size: 10px;
       font-weight: bold;
@@ -414,6 +421,7 @@
     }
 
     .section-title {
+      font-family: var(--font-title);
       font-size: 10px;
       font-weight: bold;
       color: var(--muted);
@@ -600,8 +608,8 @@
     }
     .handoff-content.visible { display: block; }
 
-    .handoff-content .md-h1 { color: var(--text); font-weight: bold; }
-    .handoff-content .md-h2 { color: var(--text); font-weight: bold; }
+    .handoff-content .md-h1 { font-family: var(--font-title); color: var(--text); font-weight: bold; }
+    .handoff-content .md-h2 { font-family: var(--font-title); color: var(--text); font-weight: bold; }
     .handoff-content .md-bold { color: var(--text); }
 
     /* ── Plans view ── */
@@ -891,6 +899,7 @@
     }
 
     .wizard-section-title {
+      font-family: var(--font-title);
       font-size: 11px;
       color: var(--dim);
       text-transform: uppercase;
