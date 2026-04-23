@@ -6,6 +6,7 @@ pub mod hooks;
 pub mod notify;
 pub mod orchestrator;
 pub mod parser;
+pub mod prompt_runner;
 pub mod session;
 pub mod statusline;
 pub mod storage;

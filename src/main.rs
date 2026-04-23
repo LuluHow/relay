@@ -6,6 +6,7 @@ mod hooks;
 mod notify;
 mod orchestrator;
 mod parser;
+mod prompt_runner;
 mod session;
 mod statusline;
 mod storage;
