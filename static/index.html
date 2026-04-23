@@ -525,6 +525,268 @@
     .handoff-content .md-h2 { color: var(--text); font-weight: bold; }
     .handoff-content .md-bold { color: var(--text); }
 
+    /* ── Plans view ── */
+    .plans-view {
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .plan-launch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 32px;
+      gap: 14px;
+    }
+
+    .plan-launch label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      align-self: stretch;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .plan-launch textarea {
+      width: 100%;
+      max-width: 600px;
+      min-height: 240px;
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .plan-launch textarea:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .plan-launch .btn-launch {
+      background: none;
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 6px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .plan-launch .btn-launch:hover {
+      background: var(--sel-bg);
+    }
+    .plan-launch .btn-launch.loading {
+      border-color: var(--amber);
+      color: var(--amber);
+      pointer-events: none;
+    }
+
+    .plan-error {
+      color: var(--red);
+      font-size: 11px;
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* Plan monitoring */
+    .plan-monitor {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .plan-header-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .plan-name {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .plan-branch {
+      font-size: 11px;
+      color: var(--amber);
+    }
+
+    .plan-state-badge {
+      font-size: 10px;
+      padding: 1px 8px;
+      border-radius: 3px;
+      border: 1px solid;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .plan-elapsed {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    .plan-counts {
+      font-size: 11px;
+      color: var(--dim);
+      margin-left: auto;
+    }
+    .plan-counts .cnt-val { color: var(--text); }
+
+    /* Task list */
+    .task-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .task-card {
+      margin: 0 14px 6px;
+      padding: 8px 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .task-card:hover {
+      background: var(--sel-bg);
+    }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-status-icon {
+      flex-shrink: 0;
+      font-size: 12px;
+      width: 16px;
+      text-align: center;
+    }
+    .task-status-icon.pending  { color: var(--muted); }
+    .task-status-icon.blocked  { color: var(--muted); opacity: 0.6; }
+    .task-status-icon.running  { color: var(--green); }
+    .task-status-icon.done     { color: var(--green); }
+    .task-status-icon.failed   { color: var(--red); }
+
+    @keyframes pulse-glow {
+      0%, 100% { text-shadow: 0 0 4px var(--green-glow); }
+      50%      { text-shadow: 0 0 10px var(--green-glow), 0 0 16px var(--green); }
+    }
+    .task-status-icon.running {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    .task-name {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--text);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-elapsed {
+      font-size: 10px;
+      color: var(--dim);
+      flex-shrink: 0;
+    }
+
+    .task-deps {
+      font-size: 10px;
+      color: var(--muted);
+      margin-left: 24px;
+      margin-top: 2px;
+    }
+
+    .task-output {
+      display: none;
+      margin-top: 8px;
+      margin-left: 24px;
+    }
+    .task-output.visible { display: block; }
+
+    .task-output pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 8px 10px;
+      font-family: var(--font);
+      font-size: 11px;
+      color: var(--dim);
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .task-exit-code {
+      font-size: 10px;
+      margin-top: 4px;
+      color: var(--muted);
+    }
+    .task-exit-code.success { color: var(--green); }
+    .task-exit-code.failure { color: var(--red); }
+
+    /* Plan action bar */
+    .plan-actions {
+      display: flex;
+      gap: 8px;
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      flex-shrink: 0;
+    }
+
+    .plan-actions .btn-plan {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .plan-actions .btn-plan:hover   { opacity: 0.85; }
+    .plan-actions .btn-plan.abort   { border-color: var(--red);   color: var(--red); }
+    .plan-actions .btn-plan.merge   { border-color: var(--green); color: var(--green); }
+    .plan-actions .btn-plan.pr      { border-color: var(--cyan);  color: var(--cyan); }
+    .plan-actions .btn-plan.newplan { border-color: var(--border); color: var(--dim); }
+    .plan-actions .btn-plan:disabled { opacity: 0.4; pointer-events: none; }
+
+    .plan-actions .pr-url {
+      font-size: 11px;
+      color: var(--cyan);
+      align-self: center;
+      margin-left: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .plan-actions .pr-url a { color: var(--cyan); }
+
     /* ── Empty states ── */
     .empty {
       padding: 28px 16px;
@@ -570,6 +832,7 @@
     <div class="tab-group">
       <button class="tab-btn active" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
       <button class="tab-btn" data-tab="handoffs" onclick="switchTab('handoffs')">Handoffs</button>
+      <button class="tab-btn" data-tab="plans" onclick="switchTab('plans')">Plans</button>
     </div>
     <div class="ws-status">
       <span id="ws-label">connecting</span>
@@ -602,6 +865,9 @@
     <div class="empty">Loading&hellip;</div>
   </div>
 
+  <!-- Plans view -->
+  <div class="plans-view" id="plans-view" style="display:none"></div>
+
   <footer>
     <span id="footer-counts">&mdash;</span>
     <span id="footer-updated">&mdash;</span>
@@ -618,6 +884,10 @@
     let reconnectTimer = null;
     const expandedHandoffs = new Set();
     const handoffCache = {};
+    let orchestrationState = null;
+    let orchPollTimer = null;
+    const expandedTasks = new Set();
+    let orchPrUrl = null;
 
     // ── Formatters ──
     function fmtAge(secs) {
@@ -1116,7 +1386,9 @@
       });
       document.getElementById('sessions-view').style.display = tab === 'sessions' ? 'grid' : 'none';
       document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
+      document.getElementById('plans-view').style.display = tab === 'plans' ? 'flex' : 'none';
       if (tab === 'handoffs') renderHandoffs();
+      if (tab === 'plans') renderOrchestration();
     }
 
     async function toggleHandoff(id) {
@@ -1214,6 +1486,10 @@
             await fetchHandoffs();
             if (activeTab === 'handoffs') renderHandoffs();
             break;
+          case 'orchestration_updated':
+            orchestrationState = msg.snapshot || msg;
+            renderOrchestration();
+            break;
           case 'resync':
             sessions = msg.sessions || [];
             handoffs = msg.handoffs || [];
@@ -1246,11 +1522,246 @@
       } catch (_) {}
     }
 
+    // ── Orchestration ──
+    function orchStateColor(state) {
+      if (state === 'running')   return 'var(--green)';
+      if (state === 'completed') return 'var(--green)';
+      if (state === 'failed')    return 'var(--red)';
+      if (state === 'aborted')   return 'var(--amber)';
+      return 'var(--muted)';
+    }
+
+    function taskStatusIcon(status) {
+      switch (status) {
+        case 'pending':  return '\u25CC'; // ◌
+        case 'blocked':  return '\u2298'; // ⊘
+        case 'running':  return '\u25CF'; // ●
+        case 'done':     return '\u2713'; // ✓
+        case 'failed':   return '\u2717'; // ✗
+        default:         return '\u25CB'; // ○
+      }
+    }
+
+    function renderOrchestration() {
+      const view = document.getElementById('plans-view');
+      if (orchestrationState && orchestrationState.plan_name) {
+        renderOrchMonitor(view);
+      } else {
+        renderOrchLaunch(view);
+      }
+    }
+
+    function renderOrchLaunch(view) {
+      view.innerHTML = '<div class="plan-launch">'
+        + '<label>Plan TOML</label>'
+        + '<textarea id="plan-toml-input" placeholder="[plan]\nname = &quot;my-plan&quot;\nbranch = &quot;feat/my-plan&quot;\n\n[[task]]\nname = &quot;task-1&quot;\nprompt = &quot;...&quot;"></textarea>'
+        + '<button class="btn-launch" id="btn-launch" onclick="launchPlan()">Launch</button>'
+        + '<div class="plan-error" id="plan-error"></div>'
+        + '</div>';
+    }
+
+    function renderOrchMonitor(view) {
+      const s = orchestrationState;
+      const stateCol = orchStateColor(s.state);
+      const counts = s.counts || {};
+
+      // Header bar
+      let html = '<div class="plan-monitor">'
+        + '<div class="plan-header-bar">'
+        + '<span class="plan-name">' + esc(s.plan_name || 'Plan') + '</span>';
+      if (s.branch) html += '<span class="plan-branch">' + esc(s.branch) + '</span>';
+      html += '<span class="plan-state-badge" style="color:' + stateCol + ';border-color:' + stateCol + '">' + esc(s.state || '?') + '</span>'
+        + '<span class="plan-elapsed">' + esc(fmtElapsed(s.elapsed_secs || 0)) + '</span>';
+
+      // Counts
+      const parts = [];
+      if (counts.done != null)    parts.push('<span class="cnt-val">' + counts.done + '</span>/' + (s.tasks ? s.tasks.length : 0) + ' done');
+      if (counts.running != null && counts.running > 0) parts.push('<span class="cnt-val">' + counts.running + '</span> running');
+      if (counts.blocked != null && counts.blocked > 0) parts.push('<span class="cnt-val">' + counts.blocked + '</span> blocked');
+      if (counts.failed != null && counts.failed > 0)   parts.push('<span class="cnt-val" style="color:var(--red)">' + counts.failed + '</span> failed');
+      if (counts.pending != null && counts.pending > 0) parts.push('<span class="cnt-val">' + counts.pending + '</span> pending');
+      if (parts.length) {
+        html += '<span class="plan-counts">' + parts.join(' \u00b7 ') + '</span>';
+      }
+      html += '</div>';
+
+      // Task list
+      html += '<div class="task-list">';
+      const tasks = s.tasks || [];
+      if (tasks.length === 0) {
+        html += '<div class="empty">No tasks</div>';
+      } else {
+        for (const t of tasks) {
+          const isExpanded = expandedTasks.has(t.name);
+          html += '<div class="task-card" onclick="toggleTask(\'' + esc(t.name) + '\')">'
+            + '<div class="task-row">'
+            + '<span class="task-status-icon ' + esc(t.status) + '">' + taskStatusIcon(t.status) + '</span>'
+            + '<span class="task-name">' + esc(t.name) + '</span>';
+          if (t.elapsed_secs != null) {
+            html += '<span class="task-elapsed">' + esc(fmtElapsed(t.elapsed_secs)) + '</span>';
+          }
+          html += '</div>';
+
+          // Dependencies
+          if (t.depends_on && t.depends_on.length) {
+            html += '<div class="task-deps">depends on: ' + t.depends_on.map(d => esc(d)).join(', ') + '</div>';
+          }
+
+          // Output (expandable)
+          html += '<div class="task-output' + (isExpanded ? ' visible' : '') + '">';
+          if (t.output_tail && t.output_tail.length) {
+            html += '<pre>' + esc(t.output_tail.join('\n')) + '</pre>';
+          } else if (isExpanded) {
+            html += '<pre style="color:var(--muted)">No output yet</pre>';
+          }
+          if (t.exit_code != null) {
+            const ecCls = t.exit_code === 0 ? 'success' : 'failure';
+            html += '<div class="task-exit-code ' + ecCls + '">exit code: ' + t.exit_code + '</div>';
+          }
+          html += '</div></div>';
+        }
+      }
+      html += '</div>';
+
+      // Action bar
+      html += '<div class="plan-actions">';
+      const st = s.state || '';
+      if (st === 'running') {
+        html += '<button class="btn-plan abort" onclick="orchAbort(this)">Abort</button>';
+      }
+      if (st === 'completed') {
+        html += '<button class="btn-plan merge" onclick="orchMerge(this)">Merge</button>';
+        html += '<button class="btn-plan pr" onclick="orchPr(this)">Create PR</button>';
+      }
+      if (st === 'completed' || st === 'failed' || st === 'aborted') {
+        html += '<button class="btn-plan newplan" onclick="orchReset()">New Plan</button>';
+      }
+      if (orchPrUrl) {
+        html += '<span class="pr-url"><a href="' + esc(orchPrUrl) + '" target="_blank">' + esc(orchPrUrl) + '</a></span>';
+      }
+      html += '</div></div>';
+
+      view.innerHTML = html;
+    }
+
+    function toggleTask(name) {
+      if (expandedTasks.has(name)) expandedTasks.delete(name);
+      else expandedTasks.add(name);
+      renderOrchestration();
+    }
+
+    async function launchPlan() {
+      const btn = document.getElementById('btn-launch');
+      const textarea = document.getElementById('plan-toml-input');
+      const errEl = document.getElementById('plan-error');
+      const toml = textarea.value.trim();
+      if (!toml) { errEl.textContent = 'Plan TOML is empty'; return; }
+
+      btn.classList.add('loading');
+      btn.textContent = 'Launching\u2026';
+      errEl.textContent = '';
+
+      try {
+        const res = await fetch('/api/orchestrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan_toml: toml })
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchestrationState = data.snapshot || data;
+          orchPrUrl = null;
+          renderOrchestration();
+        } else {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          errEl.textContent = body.error || body.message || 'Launch failed (' + res.status + ')';
+          btn.classList.remove('loading');
+          btn.textContent = 'Launch';
+        }
+      } catch (e) {
+        errEl.textContent = 'Network error: ' + e.message;
+        btn.classList.remove('loading');
+        btn.textContent = 'Launch';
+      }
+    }
+
+    async function orchAbort(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Aborting\u2026';
+      try {
+        await fetch('/api/orchestrate/abort', { method: 'POST' });
+      } catch (_) {}
+      btn.disabled = false;
+      btn.textContent = 'Abort';
+    }
+
+    async function orchMerge(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Merging\u2026';
+      try {
+        const res = await fetch('/api/orchestrate/merge', { method: 'POST' });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          alert('Merge failed: ' + (body.error || res.statusText));
+        }
+      } catch (e) {
+        alert('Merge error: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Merge';
+    }
+
+    async function orchPr(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Creating\u2026';
+      try {
+        const res = await fetch('/api/orchestrate/pr', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          orchPrUrl = data.pr_url || data.url || null;
+          renderOrchestration();
+        } else {
+          const body = await res.json().catch(() => ({ error: res.statusText }));
+          alert('PR failed: ' + (body.error || res.statusText));
+        }
+      } catch (e) {
+        alert('PR error: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Create PR';
+    }
+
+    function orchReset() {
+      orchestrationState = null;
+      orchPrUrl = null;
+      expandedTasks.clear();
+      renderOrchestration();
+    }
+
+    async function fetchOrchStatus() {
+      try {
+        const res = await fetch('/api/orchestrate/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.plan_name) {
+            orchestrationState = data;
+            if (activeTab === 'plans') renderOrchestration();
+          }
+        }
+      } catch (_) {}
+    }
+
+    function startOrchPoll() {
+      if (orchPollTimer) return;
+      orchPollTimer = setInterval(fetchOrchStatus, 3000);
+    }
+
     // ── Init ──
     (async () => {
       await fetchVersion();
-      await Promise.all([fetchSessions(), fetchHandoffs()]);
+      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus()]);
       connectWs();
+      startOrchPoll();
     })();
   </script>
 </body>
