@@ -624,10 +624,7 @@ pub async fn stream_conversation(
     }
 }
 
-pub async fn abort_conversation(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+pub async fn abort_conversation(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match state.abort_conversation(&id).await {
         Ok(()) => Json(serde_json::json!({ "status": "aborted" })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(DynErrorResponse { error: e })).into_response(),

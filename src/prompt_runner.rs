@@ -47,7 +47,7 @@ pub enum ConvStatus {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatMessage {
-    pub role: String,    // "user" or "assistant"
+    pub role: String, // "user" or "assistant"
     pub content: String,
     pub timestamp_secs: u64, // seconds since conversation start
 }
@@ -100,6 +100,12 @@ pub struct ConvSnapshot {
 pub struct ConversationManager {
     conversations: Vec<Conversation>,
     next_id: u32,
+}
+
+impl Default for ConversationManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConversationManager {

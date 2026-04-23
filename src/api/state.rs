@@ -422,11 +422,7 @@ impl AppState {
         Ok(id)
     }
 
-    pub async fn send_message(
-        &self,
-        conv_id: &str,
-        req: SendMessageRequest,
-    ) -> Result<(), String> {
+    pub async fn send_message(&self, conv_id: &str, req: SendMessageRequest) -> Result<(), String> {
         let mut inner = self.inner.write().await;
         inner.conversations.send_message(conv_id, req)?;
         let _ = self.event_tx.send(Event::PromptUpdated);
@@ -450,11 +446,7 @@ impl AppState {
         inner.conversations.snapshot(id)
     }
 
-    pub async fn conversation_stream(
-        &self,
-        id: &str,
-        offset: usize,
-    ) -> Option<Vec<String>> {
+    pub async fn conversation_stream(&self, id: &str, offset: usize) -> Option<Vec<String>> {
         let inner = self.inner.read().await;
         inner.conversations.streaming_output(id, offset)
     }
@@ -465,7 +457,6 @@ impl AppState {
         let _ = self.event_tx.send(Event::PromptUpdated);
         Ok(())
     }
-
 }
 
 // ---------------------------------------------------------------------------
