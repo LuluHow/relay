@@ -50,6 +50,7 @@
       border-bottom: 1px solid var(--border);
       background: var(--bg-alt);
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .logo {
@@ -822,6 +823,127 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    /* ── Pulsing dot for running sessions ── */
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 4px var(--green); }
+      50%      { box-shadow: 0 0 8px var(--green), 0 0 14px var(--green-glow); }
+    }
+    .dot-working {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    /* ── Config toggle buttons ── */
+    .config-toggles {
+      display: flex;
+      gap: 6px;
+      margin-left: 8px;
+    }
+
+    .btn-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 10px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-toggle:hover { opacity: 0.85; }
+    .btn-toggle.on  { border-color: var(--green); color: var(--green); }
+    .btn-toggle.off { border-color: var(--red);   color: var(--red); }
+    .btn-toggle.flash {
+      animation: flash-border 0.4s ease;
+    }
+    @keyframes flash-border {
+      50% { box-shadow: 0 0 8px var(--green-glow); }
+    }
+
+    /* ── Notification banner ── */
+    .notif-banner {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 4px 14px;
+      background: #1a1a2e;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .notif-banner button {
+      background: none;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      padding: 1px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 10px;
+    }
+    .notif-banner .dismiss {
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    /* ── Responsive: Tablet ── */
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 250px 1fr;
+      }
+      #col-right {
+        display: none;
+      }
+    }
+
+    /* ── Responsive: Mobile ── */
+    @media (max-width: 768px) {
+      html { font-size: 12px; }
+
+      header { gap: 6px; }
+
+      .header-stats {
+        order: 10;
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .config-toggles {
+        order: 9;
+        margin-left: 0;
+      }
+
+      .tab-group { margin-left: 0; }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      #col-left {
+        max-height: 35vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .session-card { padding: 6px 10px; }
+
+      .kpi-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .detail-bottom {
+        grid-template-columns: 1fr;
+      }
+      .detail-section + .detail-section {
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+
+      footer { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>
@@ -834,9 +956,18 @@
       <button class="tab-btn" data-tab="handoffs" onclick="switchTab('handoffs')">Handoffs</button>
       <button class="tab-btn" data-tab="plans" onclick="switchTab('plans')">Plans</button>
     </div>
+    <div class="config-toggles" id="config-toggles">
+      <button class="btn-toggle off" id="btn-auto-handoff" onclick="toggleConfig('auto_handoff')" title="Toggle auto-handoff">auto OFF</button>
+      <button class="btn-toggle off" id="btn-auto-commit" onclick="toggleConfig('auto_commit')" title="Toggle auto-commit">git &#9675;</button>
+    </div>
     <div class="ws-status">
       <span id="ws-label">connecting</span>
       <div class="ws-dot reconnecting" id="ws-dot"></div>
+    </div>
+    <div class="notif-banner" id="notif-banner" style="display:none">
+      <span>Enable notifications for handoff alerts</span>
+      <button onclick="requestNotifPermission()">Enable</button>
+      <button class="dismiss" onclick="dismissNotifBanner()">Dismiss</button>
     </div>
   </header>
 
@@ -871,7 +1002,8 @@
   <footer>
     <span id="footer-counts">&mdash;</span>
     <span id="footer-updated">&mdash;</span>
-    <span class="footer-hints">j/k navigate &middot; enter select</span>
+    <span id="footer-uptime"></span>
+    <span class="footer-hints">1/2/3 tabs &middot; j/k navigate &middot; enter select</span>
   </footer>
 
   <script>
@@ -888,6 +1020,10 @@
     let orchPollTimer = null;
     const expandedTasks = new Set();
     let orchPrUrl = null;
+    let configAutoHandoff = false;
+    let configAutoCommit = false;
+    let serverUptime = null;
+    let uptimeFetchedAt = null;
 
     // ── Formatters ──
     function fmtAge(secs) {
@@ -1114,12 +1250,12 @@
         html += '<div class="session-card' + sel + '" onclick="selectSession(\'' + esc(s.session_id) + '\')">'
           + '<div class="card-r1">'
           + '<span class="dot ' + dotClass(s.state) + '"></span>'
-          + '<span class="card-project">' + esc(s.project_name) + '</span>'
+          + '<span class="card-project" title="' + esc(s.project_name) + '">' + esc(s.project_name) + '</span>'
           + '<span class="card-sid">' + esc(shortId(s.session_id)) + '</span>'
           + '</div>'
           + '<div class="card-r2">'
           + '<span class="card-state" style="color:' + stateColor(s.state) + '">' + esc(s.state) + '</span>'
-          + '<span class="card-cwd">' + esc(truncCwd(s.cwd)) + '</span>'
+          + '<span class="card-cwd" title="' + esc(s.cwd || '') + '">' + esc(truncCwd(s.cwd)) + '</span>'
           + '</div>'
           + '<div class="card-r3">'
           + '<span class="card-age">' + esc(fmtAge(s.age_secs)) + '</span>'
@@ -1194,7 +1330,7 @@
             + '<span class="tl-time">' + esc(fmtTime(t.timestamp)) + '</span>'
             + '<span class="tl-name" style="color:' + col + '">' + esc(t.name) + '</span>'
             + '<span class="tl-icon" style="color:' + col + '">' + toolIcon(t.name) + '</span>'
-            + '<span class="tl-input">' + esc(t.input_summary) + '</span>'
+            + '<span class="tl-input" title="' + esc(t.input_summary) + '">' + esc(t.input_summary) + '</span>'
             + '</div>';
         }
       }
@@ -1369,6 +1505,11 @@
         s + ' session' + (s !== 1 ? 's' : '') + ' \u00b7 ' + h + ' handoff' + (h !== 1 ? 's' : '');
       document.getElementById('footer-updated').textContent =
         'updated ' + new Date().toLocaleTimeString();
+      const upEl = document.getElementById('footer-uptime');
+      if (upEl) {
+        const up = serverUptime != null ? serverUptime + (Date.now() - uptimeFetchedAt) / 1000 : null;
+        upEl.textContent = up != null ? 'up ' + fmtElapsed(Math.floor(up)) : '';
+      }
     }
 
     // ── Events ──
@@ -1483,13 +1624,19 @@
             render();
             break;
           case 'handoff_created':
+            notifyHandoff(msg);
             await fetchHandoffs();
             if (activeTab === 'handoffs') renderHandoffs();
             break;
-          case 'orchestration_updated':
+          case 'orchestration_updated': {
+            const prevState = orchestrationState ? orchestrationState.state : null;
             orchestrationState = msg.snapshot || msg;
+            if (orchestrationState.state !== prevState) {
+              notifyOrchStateChange(orchestrationState.state);
+            }
             renderOrchestration();
             break;
+          }
           case 'resync':
             sessions = msg.sessions || [];
             handoffs = msg.handoffs || [];
@@ -1519,6 +1666,8 @@
       try {
         const data = await fetch('/api/health').then(r => r.json());
         document.getElementById('version').textContent = 'v' + data.version;
+        serverUptime = data.uptime_secs || data.uptime || null;
+        uptimeFetchedAt = Date.now();
       } catch (_) {}
     }
 
@@ -1756,12 +1905,148 @@
       orchPollTimer = setInterval(fetchOrchStatus, 3000);
     }
 
+    // ── Config toggles ──
+    function renderConfigToggles() {
+      const hBtn = document.getElementById('btn-auto-handoff');
+      const cBtn = document.getElementById('btn-auto-commit');
+      if (hBtn) {
+        hBtn.className = 'btn-toggle ' + (configAutoHandoff ? 'on' : 'off');
+        hBtn.textContent = configAutoHandoff ? 'auto ON' : 'auto OFF';
+      }
+      if (cBtn) {
+        cBtn.className = 'btn-toggle ' + (configAutoCommit ? 'on' : 'off');
+        cBtn.textContent = configAutoCommit ? 'git \u25CF' : 'git \u25CB';
+      }
+    }
+
+    async function toggleConfig(key) {
+      if (key === 'auto_handoff') configAutoHandoff = !configAutoHandoff;
+      if (key === 'auto_commit') configAutoCommit = !configAutoCommit;
+      renderConfigToggles();
+
+      const btn = key === 'auto_handoff'
+        ? document.getElementById('btn-auto-handoff')
+        : document.getElementById('btn-auto-commit');
+
+      try {
+        const res = await fetch('/api/config/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key })
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.auto_handoff != null) configAutoHandoff = data.auto_handoff;
+          if (data.auto_commit != null) configAutoCommit = data.auto_commit;
+          renderConfigToggles();
+        }
+        if (btn) {
+          btn.classList.add('flash');
+          setTimeout(() => btn.classList.remove('flash'), 400);
+        }
+      } catch (_) {
+        if (key === 'auto_handoff') configAutoHandoff = !configAutoHandoff;
+        if (key === 'auto_commit') configAutoCommit = !configAutoCommit;
+        renderConfigToggles();
+      }
+    }
+
+    async function fetchConfig() {
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.auto_handoff != null) configAutoHandoff = data.auto_handoff;
+          if (data.auto_commit != null) configAutoCommit = data.auto_commit;
+          renderConfigToggles();
+        }
+      } catch (_) {}
+    }
+
+    // ── Browser notifications ──
+    function checkNotifPermission() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        const banner = document.getElementById('notif-banner');
+        if (banner) banner.style.display = 'flex';
+      }
+    }
+
+    function requestNotifPermission() {
+      if (!('Notification' in window)) return;
+      Notification.requestPermission().then(() => {
+        const banner = document.getElementById('notif-banner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
+
+    function dismissNotifBanner() {
+      const banner = document.getElementById('notif-banner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    function notifyHandoff(msg) {
+      if (Notification.permission === 'granted') {
+        new Notification('relay \u2014 handoff saved', {
+          body: 'Handoff ' + (msg.id || '') + ' created',
+          icon: '/favicon.svg'
+        });
+      }
+    }
+
+    function notifyOrchStateChange(newState) {
+      if (Notification.permission !== 'granted') return;
+      if (newState === 'completed' || newState === 'failed') {
+        const s = orchestrationState;
+        const counts = s && s.counts ? s.counts : {};
+        const total = s && s.tasks ? s.tasks.length : 0;
+        new Notification('relay \u2014 plan ' + newState, {
+          body: (s ? s.plan_name : 'Plan') + ': ' + (counts.done || 0) + '/' + total + ' tasks done',
+          icon: '/favicon.svg'
+        });
+      }
+    }
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      switch (e.key) {
+        case '1': switchTab('sessions'); break;
+        case '2': switchTab('handoffs'); break;
+        case '3': switchTab('plans'); break;
+        case 'j':
+        case 'k': {
+          if (activeTab !== 'sessions' || !sessions.length) return;
+          const idx = sessions.findIndex(s => s.session_id === selectedId);
+          let next;
+          if (e.key === 'j') next = Math.min(sessions.length - 1, idx + 1);
+          else next = Math.max(0, idx - 1);
+          selectSession(sessions[next].session_id);
+          const cards = document.querySelectorAll('.session-card');
+          if (cards[next]) cards[next].scrollIntoView({ block: 'nearest' });
+          break;
+        }
+        case 'Enter': {
+          if (activeTab !== 'sessions') return;
+          const sel = getSelected();
+          if (sel) {
+            renderSessionDetail();
+            renderSessionMetrics();
+          }
+          break;
+        }
+      }
+    });
+
     // ── Init ──
     (async () => {
       await fetchVersion();
-      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus()]);
+      await Promise.all([fetchSessions(), fetchHandoffs(), fetchOrchStatus(), fetchConfig()]);
       connectWs();
       startOrchPoll();
+      checkNotifPermission();
+      renderConfigToggles();
     })();
   </script>
 </body>
