@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::state::{AppState, HandoffEntry, SessionSnapshot};
+use crate::api::state::{AppState, ConfigToggleRequest, HandoffEntry, SessionSnapshot};
 use crate::{handoff, parser, session, storage};
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
@@ -203,14 +203,23 @@ pub async fn get_handoff(Path(id): Path<String>) -> Response {
 
 pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
     let c = state.config().await;
+    let overrides = state.config_overrides().await;
+    let auto_handoff = overrides
+        .get("auto_handoff")
+        .copied()
+        .unwrap_or(c.auto_handoff);
+    let auto_commit = overrides
+        .get("auto_commit")
+        .copied()
+        .unwrap_or(c.auto_commit);
     Json(ConfigResponse {
         threshold: c.threshold,
         max_turns: c.max_turns,
         interval: c.interval,
         cooldown: c.cooldown,
         notify: c.notify,
-        auto_handoff: c.auto_handoff,
-        auto_commit: c.auto_commit,
+        auto_handoff,
+        auto_commit,
         commit_before_handoff: c.commit_before_handoff,
         commit_prefix: c.commit_prefix,
         sound: c.sound,
@@ -220,4 +229,27 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
         api_bind: c.api_bind,
         api_token: c.api_token.map(|_| "***".to_string()),
     })
+}
+
+pub async fn toggle_config(
+    State(state): State<AppState>,
+    Json(req): Json<ConfigToggleRequest>,
+) -> Response {
+    const VALID_KEYS: &[&str] = &["auto_handoff", "auto_commit"];
+    if !VALID_KEYS.contains(&req.key.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(DynErrorResponse {
+                error: format!("invalid key '{}', valid keys: {:?}", req.key, VALID_KEYS),
+            }),
+        )
+            .into_response();
+    }
+    state.set_config_override(req.key.clone(), req.value).await;
+    Json(serde_json::json!({
+        "key": req.key,
+        "value": req.value,
+        "message": "override applied"
+    }))
+    .into_response()
 }

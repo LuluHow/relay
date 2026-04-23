@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::config::Config;
@@ -23,6 +24,7 @@ pub struct AppStateInner {
     pub sessions: Vec<SessionSnapshot>,
     pub handoffs: Vec<HandoffEntry>,
     pub config: Config,
+    pub config_overrides: HashMap<String, bool>,
     pub last_refresh: Instant,
 }
 
@@ -38,6 +40,48 @@ pub struct SessionSnapshot {
     pub cost_usd: f64,
     pub age_secs: u64,
     pub files_touched: usize,
+    // From ParsedSession
+    pub cwd: String,
+    pub version: String,
+    pub tool_uses: Vec<ToolUseSnapshot>,
+    pub files_touched_paths: Vec<String>,
+    pub user_messages: Vec<MessageSnapshot>,
+    pub assistant_messages: Vec<MessageSnapshot>,
+    pub context_history: Vec<u64>,
+    pub compaction_count: u32,
+    pub total_input_tokens: u64,
+    pub total_output_tokens: u64,
+    pub total_cache_read: u64,
+    pub total_cache_create: u64,
+    pub current_context_tokens: u64,
+    // From SessionStatus (statusline)
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    pub context_window_size: u64,
+    pub five_hour_used_pct: Option<f64>,
+    pub five_hour_resets_at: Option<u64>,
+    pub seven_day_used_pct: Option<f64>,
+    pub seven_day_resets_at: Option<u64>,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolUseSnapshot {
+    pub name: String,
+    pub input_summary: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MessageSnapshot {
+    pub content: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConfigToggleRequest {
+    pub key: String,
+    pub value: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,6 +112,7 @@ impl AppState {
                 sessions: Vec::new(),
                 handoffs: Vec::new(),
                 config,
+                config_overrides: HashMap::new(),
                 last_refresh: Instant::now(),
             })),
             event_tx,
@@ -109,6 +154,34 @@ impl AppState {
                         }
                         .to_string();
 
+                        let tool_uses = parsed
+                            .tool_uses
+                            .iter()
+                            .map(|t| ToolUseSnapshot {
+                                name: t.name.clone(),
+                                input_summary: t.input_summary.clone(),
+                                timestamp: t.timestamp.clone(),
+                            })
+                            .collect();
+
+                        let user_messages = parsed
+                            .user_messages
+                            .iter()
+                            .map(|m| MessageSnapshot {
+                                content: m.content.clone(),
+                                timestamp: m.timestamp.clone(),
+                            })
+                            .collect();
+
+                        let assistant_messages = parsed
+                            .assistant_messages
+                            .iter()
+                            .map(|m| MessageSnapshot {
+                                content: m.content.clone(),
+                                timestamp: m.timestamp.clone(),
+                            })
+                            .collect();
+
                         Some(SessionSnapshot {
                             session_id: info.session_id.clone(),
                             project_name: info.project_name.clone(),
@@ -120,6 +193,31 @@ impl AppState {
                             cost_usd,
                             age_secs: parsed.age_secs,
                             files_touched: parsed.files_touched.len(),
+                            // From ParsedSession
+                            cwd: parsed.cwd.clone(),
+                            version: parsed.version.clone(),
+                            tool_uses,
+                            files_touched_paths: parsed.files_touched.clone(),
+                            user_messages,
+                            assistant_messages,
+                            context_history: parsed.context_history.clone(),
+                            compaction_count: parsed.compaction_count,
+                            total_input_tokens: parsed.total_input_tokens,
+                            total_output_tokens: parsed.total_output_tokens,
+                            total_cache_read: parsed.total_cache_read,
+                            total_cache_create: parsed.total_cache_create,
+                            current_context_tokens: parsed.current_context_tokens,
+                            // From SessionStatus (statusline)
+                            lines_added: status.map(|s| s.lines_added).unwrap_or(0),
+                            lines_removed: status.map(|s| s.lines_removed).unwrap_or(0),
+                            context_window_size: status
+                                .and_then(|s| s.context_window_size)
+                                .unwrap_or(0),
+                            five_hour_used_pct: status.and_then(|s| s.five_hour_used_pct),
+                            five_hour_resets_at: status.and_then(|s| s.five_hour_resets_at),
+                            seven_day_used_pct: status.and_then(|s| s.seven_day_used_pct),
+                            seven_day_resets_at: status.and_then(|s| s.seven_day_resets_at),
+                            duration_ms: status.map(|s| s.duration_ms).unwrap_or(0),
                         })
                     })
                     .collect();
@@ -170,6 +268,15 @@ impl AppState {
 
     pub fn notify_handoff_created(&self, id: String) {
         let _ = self.event_tx.send(Event::HandoffCreated { id });
+    }
+
+    pub async fn set_config_override(&self, key: String, value: bool) {
+        let mut inner = self.inner.write().await;
+        inner.config_overrides.insert(key, value);
+    }
+
+    pub async fn config_overrides(&self) -> HashMap<String, bool> {
+        self.inner.read().await.config_overrides.clone()
     }
 }
 

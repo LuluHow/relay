@@ -65,6 +65,7 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/api/handoffs", get(routes::list_handoffs))
         .route("/api/handoffs/{id}", get(routes::get_handoff))
         .route("/api/config", get(routes::get_config))
+        .route("/api/config/toggle", post(routes::toggle_config))
         .route("/api/ws", get(ws::handler))
         .fallback(static_handler)
         .layer(middleware::from_fn_with_state(
