@@ -103,6 +103,52 @@
     .tab-btn.active { background: var(--sel-bg); color: var(--green); }
     .tab-btn + .tab-btn { border-left: 1px solid var(--border); }
 
+    /* ── Burger menu (mobile) ── */
+    .burger-btn {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      margin-left: auto;
+      order: 99;
+    }
+    .burger-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .burger-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 10px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      z-index: 100;
+      min-width: 140px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .burger-menu.open { display: block; }
+
+    .burger-menu-item {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: var(--dim);
+      font-family: var(--font);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .burger-menu-item:hover { background: var(--sel-bg); color: var(--text); }
+    .burger-menu-item.active { color: var(--green); }
+    .burger-menu-item + .burger-menu-item { border-top: 1px solid var(--border); }
+
     /* ── Auth screen ── */
     .auth-overlay {
       position: fixed;
@@ -553,6 +599,78 @@
     .btn-handoff.saved   { border-color: var(--green); color: var(--green); }
     .btn-handoff.errored { border-color: var(--red);   color: var(--red); }
 
+    .btn-resume {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      transition: all 0.15s;
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+    .btn-resume:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    /* Resume modal */
+    .resume-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 999;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .resume-modal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      width: min(420px, 90vw);
+      font-family: var(--font);
+    }
+    .resume-modal h3 {
+      font-family: var(--font-title);
+      color: var(--cyan);
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+    .resume-modal textarea {
+      width: 100%; box-sizing: border-box;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 12px;
+      border-radius: 4px;
+      padding: 8px;
+      resize: vertical;
+      min-height: 60px;
+    }
+    .resume-modal textarea:focus { outline: none; border-color: var(--cyan); }
+    .resume-modal .resume-actions {
+      display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;
+    }
+    .resume-modal .resume-actions button {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 12px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+    }
+    .resume-modal .resume-actions .btn-send-resume {
+      border-color: var(--cyan); color: var(--cyan);
+    }
+    .resume-modal .resume-actions .btn-send-resume:hover {
+      background: var(--cyan); color: var(--bg);
+    }
+    .resume-modal .resume-error {
+      color: var(--red); font-size: 11px; margin-top: 6px;
+    }
+
     /* ── Handoffs view ── */
     .handoffs-view {
       overflow-y: auto;
@@ -611,6 +729,21 @@
     .handoff-content .md-h1 { font-family: var(--font-title); color: var(--text); font-weight: bold; }
     .handoff-content .md-h2 { font-family: var(--font-title); color: var(--text); font-weight: bold; }
     .handoff-content .md-bold { color: var(--text); }
+
+    .handoff-actions {
+      display: flex; gap: 6px; margin-bottom: 8px;
+    }
+    .btn-restore {
+      background: none;
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 3px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+    }
+    .btn-restore:hover { background: var(--green); color: var(--bg); }
 
     /* ── Plans view ── */
     .plans-view {
@@ -1651,6 +1784,19 @@
       border-style: dashed;
     }
 
+    .chat-tools {
+      border-left: 2px solid var(--border);
+      padding-left: 8px;
+      margin-bottom: 6px;
+    }
+    .chat-tool-entry {
+      font-size: 11px;
+      padding: 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .typing-dot {
       display: inline-block;
       width: 6px;
@@ -1712,6 +1858,22 @@
     }
     .prompt-sidebar-toggle:hover { color: var(--text); border-color: var(--muted); }
 
+    /* Mobile back button in chat header */
+    .conv-back {
+      display: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 3px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+    .conv-back:hover { color: var(--text); border-color: var(--muted); }
+
     /* ── Responsive: Tablet ── */
     @media (max-width: 1024px) {
       .layout {
@@ -1743,8 +1905,15 @@
       }
 
       .tab-group {
-        margin-left: auto;
-        order: 2;
+        display: none;
+      }
+
+      .burger-btn {
+        display: block;
+      }
+
+      header {
+        position: relative;
       }
 
       .ws-status {
@@ -1915,30 +2084,38 @@
       /* ── Prompt view ── */
       .prompt-layout {
         grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
+        grid-template-rows: 1fr;
+      }
+
+      /* Mobile: show sidebar (list) OR main (chat), not both */
+      .prompt-layout.mobile-chat .prompt-sidebar {
+        display: none;
+      }
+      .prompt-layout:not(.mobile-chat) .prompt-main {
+        display: none;
       }
 
       .prompt-sidebar {
         border-right: none;
-        border-bottom: 1px solid var(--border);
         max-height: none;
-        overflow: visible;
+        overflow: auto;
       }
 
+      /* Hide desktop toggle on mobile - no longer needed */
+      .prompt-sidebar-toggle {
+        display: none !important;
+      }
+
+      /* Always show sidebar content on mobile (no collapsed state) */
       .prompt-sidebar.collapsed .prompt-sidebar-body {
-        display: none;
+        display: block;
       }
       .prompt-sidebar.collapsed .btn-new-prompt {
-        display: none;
-      }
-
-      .prompt-sidebar-toggle {
         display: block;
       }
 
-      .prompt-sidebar-body {
-        max-height: 30vh;
-        overflow-y: auto;
+      .conv-back {
+        display: inline-flex;
       }
 
       .prompt-form {
@@ -2013,6 +2190,13 @@
       <button class="tab-btn" data-tab="handoffs" onclick="switchTab('handoffs')">Handoffs</button>
       <button class="tab-btn" data-tab="plans" onclick="switchTab('plans')">Plans</button>
       <button class="tab-btn" data-tab="prompts" onclick="switchTab('prompts')">Prompt</button>
+    </div>
+    <button class="burger-btn" onclick="toggleBurgerMenu()" aria-label="Menu">&#9776;</button>
+    <div class="burger-menu" id="burger-menu">
+      <button class="burger-menu-item active" data-tab="sessions" onclick="burgerSwitch('sessions')">Sessions</button>
+      <button class="burger-menu-item" data-tab="handoffs" onclick="burgerSwitch('handoffs')">Handoffs</button>
+      <button class="burger-menu-item" data-tab="plans" onclick="burgerSwitch('plans')">Plans</button>
+      <button class="burger-menu-item" data-tab="prompts" onclick="burgerSwitch('prompts')">Prompt</button>
     </div>
     <div class="config-toggles" id="config-toggles">
       <button class="btn-toggle off" id="btn-auto-handoff" onclick="toggleConfig('auto_handoff')" title="Toggle auto-handoff">auto OFF</button>
@@ -2169,6 +2353,7 @@
     let convStreamOffset = {};   // id -> last offset for streaming
     let convPollTimer = null;
     let convFormState = { project: '', model: '', skip_permissions: true };
+    let mobileShowChat = false; // true = show chat/form, false = show conv list
     let configAutoHandoff = false;
     let configAutoCommit = false;
     let configWorkspaces = [];
@@ -2469,6 +2654,7 @@
         + '<span class="detail-state" style="color:' + stateColor(s.state) + ';border-color:' + stateColor(s.state) + '">' + esc(s.state) + '</span>'
         + '<span class="detail-actions">'
         + '<button class="btn-handoff" onclick="saveHandoff(this,\'' + esc(s.session_id) + '\')">handoff</button>'
+        + '<button class="btn-resume" onclick="openResumeModal(\'' + esc(s.session_id) + '\',\'' + esc(s.cwd || '') + '\')">resume</button>'
         + '</span>'
         + '</div>'
         + '<div class="detail-r2">'
@@ -2686,6 +2872,7 @@
           + (h.preview ? '<div class="handoff-preview">' + esc(h.preview) + '</div>' : '')
           + '</div>'
           + '<div class="handoff-content' + (isExpanded ? ' visible' : '') + '" id="hc-' + esc(h.id) + '">'
+          + (isExpanded ? '<div class="handoff-actions"><button class="btn-restore" onclick="event.stopPropagation();openRestoreModal(\'' + esc(h.id) + '\')">Restore</button></div>' : '')
           + (isExpanded ? (cached ? renderMd(cached) : '<span style="color:var(--muted)">Loading\u2026</span>') : '')
           + '</div></div>';
       }
@@ -2705,6 +2892,31 @@
         upEl.textContent = up != null ? 'up ' + fmtElapsed(Math.floor(up)) : '';
       }
     }
+
+    // ── Burger menu ──
+    function toggleBurgerMenu() {
+      const menu = document.getElementById('burger-menu');
+      if (menu) menu.classList.toggle('open');
+    }
+
+    function burgerSwitch(tab) {
+      const menu = document.getElementById('burger-menu');
+      if (menu) menu.classList.remove('open');
+      switchTab(tab);
+      // Sync active state on burger items
+      document.querySelectorAll('.burger-menu-item').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+    }
+
+    // Close burger menu on outside click
+    document.addEventListener('click', function(e) {
+      const menu = document.getElementById('burger-menu');
+      if (!menu || !menu.classList.contains('open')) return;
+      if (!e.target.closest('.burger-btn') && !e.target.closest('.burger-menu')) {
+        menu.classList.remove('open');
+      }
+    });
 
     // ── Mobile helpers ──
     function isMobile() {
@@ -2774,6 +2986,9 @@
       document.querySelectorAll('.tab-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.tab === tab);
       });
+      document.querySelectorAll('.burger-menu-item').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
       document.getElementById('sessions-view').style.display = tab === 'sessions' ? 'grid' : 'none';
       document.getElementById('handoffs-view').style.display = tab === 'handoffs' ? 'block' : 'none';
       document.getElementById('plans-view').style.display = tab === 'plans' ? 'block' : 'none';
@@ -2801,16 +3016,122 @@
           const res = await apiFetch('/api/handoffs/' + encodeURIComponent(id));
           if (res.ok) {
             handoffCache[id] = await res.text();
-            const el = document.getElementById('hc-' + id);
-            if (el) el.innerHTML = renderMd(handoffCache[id]);
+            renderHandoffs();
           } else {
             const el = document.getElementById('hc-' + id);
-            if (el) el.innerHTML = '<span style="color:var(--red)">Failed to load</span>';
+            if (el) el.innerHTML = '<div class="handoff-actions"><button class="btn-restore" onclick="event.stopPropagation();openRestoreModal(\'' + esc(id) + '\')">Restore</button></div><span style="color:var(--red)">Failed to load</span>';
           }
         } catch (_) {
           const el = document.getElementById('hc-' + id);
-          if (el) el.innerHTML = '<span style="color:var(--red)">Network error</span>';
+          if (el) el.innerHTML = '<div class="handoff-actions"><button class="btn-restore" onclick="event.stopPropagation();openRestoreModal(\'' + esc(id) + '\')">Restore</button></div><span style="color:var(--red)">Network error</span>';
         }
+      }
+    }
+
+    function openRestoreModal(handoffId) {
+      const overlay = document.createElement('div');
+      overlay.className = 'resume-overlay';
+      overlay.id = 'restore-overlay';
+      overlay.onclick = function(e) { if (e.target === overlay) closeRestoreModal(); };
+      overlay.innerHTML =
+        '<div class="resume-modal">'
+        + '<h3 style="color:var(--green)">Restore handoff</h3>'
+        + '<div class="field-group" style="margin-bottom:8px"><label style="color:var(--dim);font-size:10px">Project</label>'
+        + '<select id="restore-project" style="width:100%;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:11px;border-radius:4px;padding:4px">'
+        + projectOptions('') + '</select></div>'
+        + '<textarea id="restore-msg" placeholder="Instructions for Claude\u2026" autofocus></textarea>'
+        + '<div class="resume-error" id="restore-error"></div>'
+        + '<div class="resume-actions">'
+        + '<button onclick="closeRestoreModal()">Cancel</button>'
+        + '<button class="btn-send-resume" id="btn-send-restore" onclick="doRestore(\'' + esc(handoffId) + '\')">Restore</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      setTimeout(() => {
+        const ta = document.getElementById('restore-msg');
+        if (ta) { ta.focus(); ta.addEventListener('keydown', restoreKey); }
+      }, 30);
+    }
+
+    function restoreKey(e) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        document.getElementById('btn-send-restore')?.click();
+      }
+      if (e.key === 'Escape') closeRestoreModal();
+    }
+
+    function closeRestoreModal() {
+      const el = document.getElementById('restore-overlay');
+      if (el) el.remove();
+    }
+
+    async function doRestore(handoffId) {
+      const ta = document.getElementById('restore-msg');
+      const errEl = document.getElementById('restore-error');
+      const btn = document.getElementById('btn-send-restore');
+      const project = (document.getElementById('restore-project') || {}).value || '';
+      const userMsg = (ta ? ta.value.trim() : '');
+
+      // Load handoff content
+      let handoffContent = handoffCache[handoffId];
+      if (!handoffContent) {
+        try {
+          const hres = await apiFetch('/api/handoffs/' + encodeURIComponent(handoffId));
+          if (hres.ok) { handoffContent = await hres.text(); handoffCache[handoffId] = handoffContent; }
+          else { if (errEl) errEl.textContent = 'Failed to load handoff'; return; }
+        } catch (e) { if (errEl) errEl.textContent = 'Network error'; return; }
+      }
+
+      const content = 'Here is a handoff document from a previous session. '
+        + 'Please review it and continue the work.\n\n'
+        + '---\n\n' + handoffContent
+        + (userMsg ? '\n\n---\n\n' + userMsg : '');
+
+      btn.disabled = true;
+      btn.textContent = 'Restoring\u2026';
+      if (errEl) errEl.textContent = '';
+
+      try {
+        const body = { skip_permissions: true };
+        if (project && project !== '__new__') body.project_path = project;
+
+        const res = await apiFetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          if (errEl) errEl.textContent = rb.error || 'Failed to create conversation';
+          btn.disabled = false; btn.textContent = 'Restore';
+          return;
+        }
+        const data = await res.json();
+        const convId = data.id;
+
+        const msgRes = await apiFetch('/api/conversations/' + encodeURIComponent(convId) + '/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        if (!msgRes.ok) {
+          const rb = await msgRes.json().catch(() => ({ error: 'Send failed' }));
+          if (errEl) errEl.textContent = rb.error || 'Failed to send message';
+          btn.disabled = false; btn.textContent = 'Restore';
+          return;
+        }
+
+        closeRestoreModal();
+        selectedConvId = convId;
+        await fetchConvList();
+        await fetchConvDetail(convId);
+        switchTab('prompts');
+        mobileShowChat = isMobile();
+        renderPrompts();
+        startConvPoll();
+      } catch (e) {
+        if (errEl) errEl.textContent = 'Network error: ' + e.message;
+        btn.disabled = false; btn.textContent = 'Restore';
       }
     }
 
@@ -2823,6 +3144,8 @@
         if (res.ok) {
           btn.className = 'btn-handoff saved';
           btn.textContent = 'saved';
+          await fetchHandoffs();
+          if (activeTab === 'handoffs') renderHandoffs();
           setTimeout(() => { btn.className = 'btn-handoff'; btn.textContent = 'handoff'; btn.disabled = false; }, 2500);
         } else {
           const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -2835,6 +3158,98 @@
         btn.className = 'btn-handoff errored';
         btn.textContent = 'error';
         setTimeout(() => { btn.className = 'btn-handoff'; btn.textContent = 'handoff'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    // ── Resume session ──
+    function openResumeModal(sessionId, cwd) {
+      const overlay = document.createElement('div');
+      overlay.className = 'resume-overlay';
+      overlay.id = 'resume-overlay';
+      overlay.onclick = function(e) { if (e.target === overlay) closeResumeModal(); };
+      overlay.innerHTML =
+        '<div class="resume-modal">'
+        + '<h3>Resume session</h3>'
+        + '<textarea id="resume-msg" placeholder="Message to send\u2026" autofocus></textarea>'
+        + '<div class="resume-error" id="resume-error"></div>'
+        + '<div class="resume-actions">'
+        + '<button onclick="closeResumeModal()">Cancel</button>'
+        + '<button class="btn-send-resume" id="btn-send-resume" onclick="doResume(\'' + esc(sessionId) + '\',\'' + esc(cwd) + '\')">Send</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      setTimeout(() => {
+        const ta = document.getElementById('resume-msg');
+        if (ta) { ta.focus(); ta.addEventListener('keydown', resumeKey); }
+      }, 30);
+    }
+
+    function resumeKey(e) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        document.getElementById('btn-send-resume')?.click();
+      }
+      if (e.key === 'Escape') closeResumeModal();
+    }
+
+    function closeResumeModal() {
+      const el = document.getElementById('resume-overlay');
+      if (el) el.remove();
+    }
+
+    async function doResume(sessionId, cwd) {
+      const ta = document.getElementById('resume-msg');
+      const errEl = document.getElementById('resume-error');
+      const btn = document.getElementById('btn-send-resume');
+      const content = (ta ? ta.value.trim() : '');
+      if (!content) { if (errEl) errEl.textContent = 'Message cannot be empty'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Sending\u2026';
+      if (errEl) errEl.textContent = '';
+
+      try {
+        // 1. Create conversation that resumes this session
+        const body = { resume_session_id: sessionId, skip_permissions: true };
+        if (cwd) body.project_path = cwd;
+        const res = await apiFetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const rb = await res.json().catch(() => ({ error: res.statusText }));
+          if (errEl) errEl.textContent = rb.error || 'Failed to create conversation';
+          btn.disabled = false; btn.textContent = 'Send';
+          return;
+        }
+        const data = await res.json();
+        const convId = data.id;
+
+        // 2. Send the message
+        const msgRes = await apiFetch('/api/conversations/' + encodeURIComponent(convId) + '/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        if (!msgRes.ok) {
+          const rb = await msgRes.json().catch(() => ({ error: 'Send failed' }));
+          if (errEl) errEl.textContent = rb.error || 'Failed to send message';
+          btn.disabled = false; btn.textContent = 'Send';
+          return;
+        }
+
+        // 3. Close modal, switch to interactive tab
+        closeResumeModal();
+        selectedConvId = convId;
+        await fetchConvList();
+        await fetchConvDetail(convId);
+        switchTab('prompts');
+        mobileShowChat = isMobile();
+        renderPrompts();
+        startConvPoll();
+      } catch (e) {
+        if (errEl) errEl.textContent = 'Network error: ' + e.message;
+        btn.disabled = false; btn.textContent = 'Send';
       }
     }
 
@@ -3765,7 +4180,8 @@
 
     function renderPrompts() {
       const view = document.getElementById('prompts-view');
-      let html = '<div class="prompt-layout">';
+      const chatClass = mobileShowChat ? ' mobile-chat' : '';
+      let html = '<div class="prompt-layout' + chatClass + '">';
 
       // Left sidebar: conversation list
       html += '<div class="prompt-sidebar collapsed">';
@@ -3825,6 +4241,7 @@
     function renderNewConvForm() {
       const cf = convFormState;
       let html = '<div class="prompt-form">';
+      html += '<button class="conv-back" onclick="mobileBackToConvList()">&#8592; Back</button>';
       html += '<div style="font-family:var(--font-title);font-size:14px;color:var(--green);margin-bottom:8px">New Conversation</div>';
 
       html += '<div class="prompt-options-row">';
@@ -3859,6 +4276,7 @@
 
       // Header
       html += '<div class="prompt-output-header">';
+      html += '<button class="conv-back" onclick="mobileBackToConvList()">&#8592; Back</button>';
       html += '<span class="po-id">' + esc(id) + '</span>';
       html += '<span class="po-status" style="color:' + stCol + ';border-color:' + stCol + '">' + esc(status) + '</span>';
       if (detail) html += '<span class="po-elapsed">' + fmtElapsed(detail.elapsed_secs || 0) + '</span>';
@@ -3879,19 +4297,38 @@
         }
       }
 
-      // Streaming response
-      if (isResponding && streaming.length) {
-        html += '<div class="chat-msg chat-assistant streaming"><div class="chat-role">Claude <span class="typing-dot"></span></div><pre class="chat-content">';
-        for (const line of streaming) {
-          if (line.startsWith('[stderr] ')) {
-            html += '<span class="stderr-line">' + esc(line) + '</span>\n';
-          } else {
-            html += esc(line) + '\n';
+      // Streaming response — reuse sessionDetailCache for tool timeline
+      if (isResponding) {
+        const sid = detail ? detail.session_id : null;
+        const sesDetail = sid ? sessionDetailCache[sid] : null;
+        const tools = sesDetail ? (sesDetail.tool_uses || []) : [];
+        const hasTools = tools.length > 0;
+        const hasText = streaming.length > 0;
+
+        html += '<div class="chat-msg chat-assistant streaming"><div class="chat-role">Claude <span class="typing-dot"></span></div>';
+
+        if (hasTools) {
+          html += '<div class="chat-tools">';
+          for (const t of tools) {
+            const col = toolColor(t.name);
+            html += '<div class="chat-tool-entry">'
+              + '<span style="color:' + col + '">' + toolIcon(t.name) + '</span> '
+              + '<span style="color:' + col + ';font-weight:bold">' + esc(t.name) + '</span> '
+              + '<span style="color:var(--dim)">' + esc(t.input_summary || '') + '</span>'
+              + '</div>';
           }
+          html += '</div>';
         }
-        html += '</pre></div>';
-      } else if (isResponding) {
-        html += '<div class="chat-msg chat-assistant streaming"><div class="chat-role">Claude <span class="typing-dot"></span></div><pre class="chat-content" style="color:var(--muted)">Thinking...</pre></div>';
+
+        if (hasText) {
+          const textLines = streaming.filter(l => !l.startsWith('[stderr] '));
+          const last = textLines.slice(-20);
+          html += '<pre class="chat-content">' + esc(last.join('\n')) + '</pre>';
+        } else if (!hasTools) {
+          html += '<pre class="chat-content" style="color:var(--muted)">Thinking...</pre>';
+        }
+
+        html += '</div>';
       }
 
       html += '</div>';
@@ -3913,11 +4350,19 @@
 
     function showNewConv() {
       selectedConvId = null;
+      mobileShowChat = isMobile();
+      renderPrompts();
+    }
+
+    function mobileBackToConvList() {
+      selectedConvId = null;
+      mobileShowChat = false;
       renderPrompts();
     }
 
     async function selectConv(id) {
       selectedConvId = id;
+      mobileShowChat = isMobile();
       // Fetch full detail
       await fetchConvDetail(id);
       renderPrompts();
@@ -3951,15 +4396,30 @@
       } catch (_) {}
     }
 
+    let _lastConvJson = '';  // fingerprint to skip no-op re-renders
+
     function startConvPoll() {
       if (convPollTimer) return;
       convPollTimer = setInterval(async () => {
         await fetchConvList();
-        // Refresh selected conversation detail
         if (selectedConvId) {
           await fetchConvDetail(selectedConvId);
+          // Also refresh session detail for tool timeline
+          const detail = convDetailCache[selectedConvId];
+          if (detail && detail.session_id) {
+            await fetchSessionDetail(detail.session_id);
+          }
         }
-        if (activeTab === 'prompts') renderPrompts();
+        if (activeTab !== 'prompts') return;
+        // Only re-render if data actually changed
+        const detail = selectedConvId ? convDetailCache[selectedConvId] : null;
+        const sid = detail ? detail.session_id : null;
+        const sesDetail = sid ? sessionDetailCache[sid] : null;
+        const fp = JSON.stringify([conversations, detail, sesDetail]);
+        if (fp !== _lastConvJson) {
+          _lastConvJson = fp;
+          renderPrompts();
+        }
       }, 1500);
     }
 
@@ -3994,6 +4454,7 @@
           await fetchConvDetail(data.id);
           renderPrompts();
           startConvPoll();
+          mobileShowChat = isMobile();
           // Focus the chat input
           setTimeout(() => {
             const inp = document.getElementById('chat-input');

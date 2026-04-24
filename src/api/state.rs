@@ -266,7 +266,11 @@ impl AppState {
         self.event_tx.subscribe()
     }
 
-    pub fn notify_handoff_created(&self, id: String) {
+    pub async fn notify_handoff_created(&self, id: String) {
+        // Refresh handoff cache from disk so GET /api/handoffs returns fresh data
+        if let Ok(fresh) = collect_handoffs() {
+            self.inner.write().await.handoffs = fresh;
+        }
         let _ = self.event_tx.send(Event::HandoffCreated { id });
     }
 
