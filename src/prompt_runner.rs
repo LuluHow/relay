@@ -17,6 +17,9 @@ pub struct CreateConversationRequest {
     pub model: Option<String>,
     #[serde(default = "default_skip_permissions")]
     pub skip_permissions: bool,
+    /// When set, resume an existing Claude Code session instead of starting fresh.
+    #[serde(default)]
+    pub resume_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -133,7 +136,10 @@ impl ConversationManager {
             return Err(format!("directory does not exist: {cwd}"));
         }
 
-        let session_id = uuid_v4();
+        let (session_id, turn_count) = match req.resume_session_id {
+            Some(sid) => (sid, 1), // start at turn 1 so --resume is used
+            None => (uuid_v4(), 0),
+        };
 
         self.conversations.push(Conversation {
             id: id.clone(),
@@ -146,7 +152,7 @@ impl ConversationManager {
             created_at: Instant::now(),
             active_child: None,
             active_buffer: Arc::new(Mutex::new(Vec::new())),
-            turn_count: 0,
+            turn_count,
         });
 
         Ok(id)

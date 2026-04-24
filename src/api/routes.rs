@@ -254,7 +254,7 @@ pub async fn create_handoff(State(state): State<AppState>, Path(id): Path<String
 
     match result {
         Ok(Ok(Some(handoff_id))) => {
-            state.notify_handoff_created(handoff_id.clone());
+            state.notify_handoff_created(handoff_id.clone()).await;
             Json(HandoffCreatedResponse {
                 id: handoff_id,
                 message: "handoff saved",
